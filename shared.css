@@ -1,0 +1,111 @@
+/* «Утренняя бумага» для веба: те же токены, что и в приложении */
+:root {
+  --paper: #F2EDE3;
+  --sheet: #FCFAF5;
+  --ink: #191510;
+  --muted: #6B6357;
+  --faint: #8C8375;
+  --rule: #DFD6C6;
+  --edge: #C9BFAD;
+  --stamp: #8C3B2A;
+  --ok: #3F6B4A;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #17140F;
+    --sheet: #1E1A14;
+    --ink: #EFE8DC;
+    --muted: #A69C8C;
+    --faint: #7D7466;
+    --rule: #332C24;
+    --edge: #3B342B;
+    --stamp: #D2634A;
+    --ok: #8FB899;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Onest', system-ui, -apple-system, sans-serif;
+  line-height: 1.6;
+  padding: 48px 20px 80px;
+}
+
+main { max-width: 640px; margin: 0 auto; }
+
+.eyebrow {
+  font-size: 11px; font-weight: 600; letter-spacing: .2em;
+  text-transform: uppercase; color: var(--faint);
+}
+
+h1 {
+  font-family: 'Literata', Georgia, serif;
+  font-size: clamp(28px, 6vw, 38px); font-weight: 600;
+  margin: 10px 0 6px; letter-spacing: -.01em;
+}
+
+h2 {
+  font-size: 11px; font-weight: 600; letter-spacing: .2em;
+  text-transform: uppercase; color: var(--faint);
+  margin: 36px 0 10px;
+}
+
+p { margin: 0 0 14px; color: var(--muted); }
+p strong { color: var(--ink); font-weight: 600; }
+a { color: var(--stamp); }
+hr { border: none; border-top: 1px solid var(--rule); margin: 36px 0; }
+
+/* оконная рама — тот же знак, что и в приложении */
+.mark {
+  width: 88px; height: 88px;
+  border: 1px solid var(--ink);
+  background: var(--sheet);
+  position: relative;
+  border-bottom-width: 4px;
+  margin-bottom: 24px;
+}
+.mark::before, .mark::after {
+  content: ''; position: absolute; background: var(--ink);
+}
+.mark::before { left: 0; right: 0; top: 50%; height: 1px; }
+.mark::after { top: 0; bottom: 0; left: 50%; width: 1px; }
+
+.card {
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 20px;
+  margin: 24px 0;
+}
+
+.button {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+  font-weight: 600;
+  padding: 16px 20px;
+  border-radius: 3px;
+  background: var(--ink);
+  color: var(--paper);
+  margin: 12px 0;
+}
+.button.ghost {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--edge);
+}
+
+.code {
+  font-family: 'Literata', Georgia, serif;
+  font-size: 34px;
+  letter-spacing: .18em;
+  color: var(--ink);
+  margin: 6px 0 0;
+}
+
+footer { margin-top: 48px; color: var(--faint); font-size: 13px; }

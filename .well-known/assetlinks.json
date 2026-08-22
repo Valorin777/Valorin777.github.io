@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "ru.charygin.okoshko",
+      "sha256_cert_fingerprints": ["96:5A:94:D1:07:6E:6C:90:5B:B8:D8:6E:CB:C8:DD:6A:54:D2:C7:D3:A9:6D:2F:87:6E:F1:9E:A3:4B:1D:07:08"]
+    }
+  }
+]

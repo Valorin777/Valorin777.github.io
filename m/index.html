@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Окошко — приглашение</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400;7..72,600&family=Onest:wght@400;600&display=swap">
+<link rel="stylesheet" href="/shared.css">
+</head>
+<body>
+<main>
+  <div class="mark"></div>
+  <div class="eyebrow">Окошко</div>
+
+  <!-- содержимое зависит от адреса: приглашение или обычная «страница не найдена» -->
+  <div id="invite" hidden>
+    <h1>Вас приглашают записаться</h1>
+    <p>Откройте приложение и введите код мастера — дальше запись займёт полминуты.</p>
+
+    <div class="card" style="text-align:center">
+      <div class="eyebrow">Код мастера</div>
+      <p class="code" id="code">000000</p>
+    </div>
+
+    <a class="button" id="open" href="#">Открыть в приложении</a>
+    <a class="button ghost" href="/">Что такое «Окошко»</a>
+
+    <p style="font-size:14px">
+      Приложения ещё нет на телефоне? Установите его, откройте «Я записываюсь»
+      и введите код выше — он не меняется.
+    </p>
+  </div>
+
+  <div id="missing" hidden>
+    <h1>Страница не найдена</h1>
+    <p>Ссылка устарела или набрана с ошибкой. Попросите мастера прислать приглашение заново.</p>
+    <a class="button ghost" href="/">На главную</a>
+  </div>
+
+  <footer>
+    Вопросы — <a href="mailto:valeratcharygin@gmail.com">valeratcharygin@gmail.com</a>
+  </footer>
+</main>
+
+<script>
+  // ссылка приглашения выглядит как /okoshko/m/481523; на GitHub Pages такой
+  // страницы физически нет, поэтому её разбирает 404-я
+  var match = location.pathname.match(/\/m\/(\d{6})\/?$/)
+    || (new URLSearchParams(location.search).get('code') || '').match(/^(\d{6})$/);
+  if (match) {
+    var code = match[1];
+    document.getElementById('code').textContent = code.slice(0, 3) + ' ' + code.slice(3);
+    document.getElementById('open').href = 'okoshko:///m/' + code;
+    document.getElementById('invite').hidden = false;
+    document.title = 'Окошко — приглашение ' + code;
+    // если приложение установлено, оно перехватит ссылку и откроется само
+    setTimeout(function () {
+      location.href = 'okoshko:///m/' + code;
+    }, 400);
+  } else {
+    document.getElementById('missing').hidden = false;
+  }
+</script>
+</body>
+</html>
