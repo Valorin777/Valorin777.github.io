@@ -5,8 +5,8 @@
 
 ## Куда это публиковать
 
-Репозиторий должен называться **charygin.github.io** — тогда сайт открывается
-по адресу `https://charygin.github.io/`, а файлы проверки ссылок лежат в корне
+Репозиторий должен называться **valorin777.github.io** — тогда сайт открывается
+по адресу `https://valorin777.github.io/`, а файлы проверки ссылок лежат в корне
 домена. Проектный репозиторий (вида `github.com/charygin/okoshko`) не подойдёт:
 Android и iOS ищут `/.well-known/` строго в корне.
 
@@ -15,7 +15,7 @@ git init
 git add -A
 git commit -m "Сайт «Окошка»"
 git branch -M main
-git remote add origin git@github.com:charygin/charygin.github.io.git
+git remote add origin git@github.com:Valorin777/valorin777.github.io.git
 git push -u origin main
 ```
 
@@ -48,6 +48,6 @@ $ANDROID_HOME/build-tools/36.0.0/apksigner verify --print-certs app-release.apk
 ## Universal links на iOS
 
 Чтобы ссылка открывала приложение без промежуточной страницы, в `app.json`
-нужен `ios.associatedDomains: ["applinks:charygin.github.io"]`. Это требует
+нужен `ios.associatedDomains: ["applinks:valorin777.github.io"]`. Это требует
 платного аккаунта Apple Developer — до него ссылка открывается в браузере,
 а страница сама предлагает перейти в приложение.
