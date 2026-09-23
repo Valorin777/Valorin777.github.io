@@ -1,4 +1,4 @@
-import{g as v,I as b,ae as g,ai as A}from"./index-DaY1RcHc.js";const L="attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}",R=`
+import{g as v,I as b,ae as g,ai as A}from"./index-CZV6K18Z.js";const L="attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}",R=`
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
 #else
