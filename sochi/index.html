@@ -1,0 +1,905 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Документальный маршрут по Сочи в двенадцати главах: как государство строило город с 1838 года до наших дней.">
+<meta name="theme-color" content="#000000">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Хроносфера">
+<meta property="og:description" content="Сочи, 1838 — 2026. Документальный маршрут в двенадцати главах.">
+<meta property="og:image" content="https://valorin777.github.io/sochi/assets/film/og.jpg">
+<meta property="og:url" content="https://valorin777.github.io/sochi/">
+<meta name="twitter:card" content="summary_large_image">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Хроносфера</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=Prata&display=swap">
+<style>
+/* Layout: a documentary film you scroll. Black "screen" scenes (titles, shots, sticky dissolves, the night map) alternate
+   with warm-black reading reels on a 12-column grid; images carry the page, type is large and rare. Single dark look by intent. */
+:root{
+  --screen:#000;            /* film: intertitles, shots, scenes, letterbox */
+  --ground:#100d0a;         /* reading reels: warm black */
+  --bone:#ede5d8;           /* primary text */
+  --silver:#a69d90;         /* secondary text, captions */
+  --sepia:#b9a48a;          /* archival dates and tone */
+  --lamp:#f5b04c;           /* the one accent: city lights, route line, focus */
+  --hair:rgba(237,229,216,.16);
+  --scrim:rgba(0,0,0,.72);
+  --serif:"Prata","Noto Serif","Georgia",serif;
+  --sans:"Golos Text","Onest","Segoe UI",system-ui,-apple-system,sans-serif;
+  --gut:clamp(20px,4.2vw,64px);
+  --bar-h:56px;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;background:var(--screen)}
+body{background:var(--screen);color:var(--bone);font:400 17px/1.6 var(--sans);-webkit-font-smoothing:antialiased;overflow-x:clip;margin:0}
+img{max-width:100%;display:block}
+a{color:inherit}
+button{font:inherit;color:inherit}
+p,h1,h2,h3,blockquote,figure,dl,dd,ol,ul{margin:0}
+ol,ul{padding:0;list-style:none}
+:focus-visible{outline:2px solid var(--lamp);outline-offset:3px}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.nw{white-space:nowrap}
+.cred a,.cred .nw{white-space:nowrap}
+.num{font-variant-numeric:tabular-nums lining-nums}
+.digits{display:inline-flex}
+.digits>span{display:inline-block;width:.64em;text-align:center}
+
+/* ——— buttons ——— */
+.btn{display:inline-flex;align-items:center;gap:12px;min-height:48px;padding:0 22px 0 18px;border-radius:2px;border:1px solid rgba(237,229,216,.55);background:rgba(0,0,0,.28);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);font:500 16px/1 var(--sans);letter-spacing:.005em;text-decoration:none;cursor:pointer;transition:background .25s,color .25s,border-color .25s}
+.btn svg{width:14px;height:14px;flex:none}
+.btn:hover{background:var(--bone);color:#000;border-color:var(--bone)}
+.btn.solid{background:var(--bone);color:#000;border-color:var(--bone)}
+.btn.solid:hover{background:#fff}
+.btn[aria-pressed="true"] .wave{opacity:1}
+.wave{opacity:.25;transition:opacity .3s}
+
+/* ——— top bar ——— */
+.bar{position:fixed;top:0;left:0;right:0;z-index:30;display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:calc(env(safe-area-inset-top,0px) + 6px) var(--gut) 6px;min-height:var(--bar-h);pointer-events:none;
+  background:linear-gradient(rgba(0,0,0,.55),rgba(0,0,0,0))}
+.bar>*{pointer-events:auto}
+.bar{transition:background-color .3s}
+.bar.solid{background:rgba(16,13,10,.94);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:0 1px 0 var(--hair)}
+.wordmark{font:400 20px/1 var(--serif);text-decoration:none;letter-spacing:.01em;transition:opacity .5s}
+body.at-opening .wordmark{opacity:0;pointer-events:none}
+.bar-where{position:absolute;left:50%;transform:translateX(-50%);font:400 14px/1 var(--sans);color:var(--silver);white-space:nowrap;transition:opacity .4s;pointer-events:none}
+.bar-nav{display:flex;align-items:center;gap:6px}
+.bar-link{font:500 15px/1 var(--sans);text-decoration:none;padding:14px 10px;border-radius:2px}
+.bar-link:hover{color:#fff;text-decoration:underline;text-underline-offset:5px;text-decoration-thickness:1px}
+.icon-btn{width:44px;height:44px;display:grid;place-items:center;border:0;background:transparent;border-radius:2px;cursor:pointer}
+.icon-btn svg{width:20px;height:20px}
+.icon-btn[aria-pressed="true"] .wave{opacity:1}
+@media (max-width:899px){.bar-where{display:none}}
+
+/* ——— 1. opening ——— */
+.opening{position:relative;height:190svh;background:var(--screen)}
+.op-stage{position:sticky;top:0;height:100vh;height:100svh;overflow:hidden}
+.op-frame{position:absolute;inset:0;overflow:hidden;background:#000}
+.op-img{width:100%;height:100%;object-fit:cover;object-position:50% 50%;opacity:0;transform:scale(1.16) translate3d(1.2%,1.4%,0);
+  animation:op-in 2.6s ease-out .2s forwards,kenburns 44s cubic-bezier(.2,.6,.3,1) .2s forwards}
+@keyframes op-in{to{opacity:1}}
+@keyframes kenburns{to{transform:scale(1.015) translate3d(0,0,0)}}
+.op-scrim{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.28) 0%,rgba(0,0,0,0) 24%,rgba(0,0,0,0) 40%,rgba(0,0,0,.5) 58%,rgba(0,0,0,.8) 76%,rgba(0,0,0,.9) 100%)}
+@media (min-width:900px) and (orientation:landscape){.op-scrim{background:linear-gradient(180deg,rgba(0,0,0,.2) 0%,rgba(0,0,0,0) 30%,rgba(0,0,0,.18) 60%,rgba(0,0,0,.55) 100%)}}
+.grain{position:absolute;inset:0;pointer-events:none;opacity:.32;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .7 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.op-black{position:absolute;inset:0;background:#000;opacity:calc(var(--p,0) * 1.5 - .25);pointer-events:none}
+.op-title{position:absolute;left:var(--gut);right:var(--gut);bottom:calc(env(safe-area-inset-bottom,0px) + 116px);display:grid;gap:18px;justify-items:start;
+  transform:translateY(calc(var(--p,0) * -7vh))}
+.op-title h1{font:400 clamp(52px,14.2vw,176px)/.92 var(--serif);letter-spacing:-.012em;margin-left:-.04em;
+  opacity:0;filter:blur(10px);animation:focus 2.2s cubic-bezier(.25,.6,.2,1) 1.1s forwards}
+@keyframes focus{to{opacity:1;filter:blur(0)}}
+.op-sub{display:grid;gap:4px;max-width:34ch;opacity:0;animation:op-in 1.6s ease 2.3s forwards}
+.op-sub .l1{font:400 clamp(19px,1.9vw,26px)/1.35 var(--serif);text-shadow:0 1px 3px rgba(0,0,0,.7)}
+.op-sub .l2{font:400 16px/1.45 var(--sans);color:var(--silver)}
+.op-actions{display:flex;flex-wrap:wrap;gap:12px;opacity:0;animation:op-in 1.4s ease 3s forwards}
+.op-foot{position:absolute;left:var(--gut);right:var(--gut);bottom:calc(env(safe-area-inset-bottom,0px) + 18px);display:flex;flex-direction:column;gap:2px;
+  font:400 13px/1.45 var(--sans);color:var(--silver);opacity:0;animation:op-in 1.4s ease 3.2s forwards}
+.op-foot a{text-decoration:none}
+.op-foot a:hover{text-decoration:underline}
+@media (min-width:900px) and (orientation:landscape){
+  .op-frame{inset:auto 0;top:50%;height:min(100svh,calc(100vw / 2.39));transform:translateY(-50%)}
+  .op-title{left:0;right:0;bottom:auto;top:50%;justify-items:center;text-align:center;transform:translateY(calc(-18% + var(--p,0) * -7vh))}
+  .op-title h1{margin-left:0}
+  .op-sub{justify-items:center;max-width:none}
+  .op-actions{justify-content:center}
+  .op-foot{flex-direction:row;justify-content:space-between;align-items:center;bottom:calc((100svh - min(100svh,100vw / 2.39)) / 4 - 10px)}
+}
+
+/* ——— 2. chapter ——— */
+.intertitle{min-height:100vh;min-height:100svh;display:grid;place-content:center;justify-items:center;text-align:center;gap:clamp(14px,2.2vh,24px);
+  padding:calc(var(--bar-h) + 40px) var(--gut) 72px;background:var(--screen)}
+.it-chapter{font:400 17px/1 var(--sans);color:var(--silver)}
+.it-year{font:400 clamp(104px,27vw,236px)/1.02 var(--serif);color:var(--sepia);letter-spacing:-.02em;margin-block:.1em -.1em}
+.it-title{font:400 clamp(34px,8.6vw,104px)/1.04 var(--serif);text-wrap:balance}
+.it-line{max-width:32ch;font:400 clamp(17px,1.35vw,20px)/1.5 var(--sans);color:var(--silver);text-wrap:balance}
+.it-rule{width:1px;height:48px;background:var(--hair)}
+
+.shot{position:relative;background:var(--screen)}
+.shot-frame{position:relative;height:100vh;height:100svh;overflow:hidden}
+.shot-frame img{width:100%;height:100%;object-fit:cover;object-position:49% 50%;transform:scale(calc(1.1 - var(--p,0) * .1));will-change:transform}
+.shot-frame::after{content:"";position:absolute;inset:auto 0 0;height:42%;background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.82))}
+.subtitle{font:500 clamp(17px,1.3vw,19px)/1.45 var(--sans);color:var(--bone);text-align:center;text-wrap:balance;text-shadow:0 1px 2px rgba(0,0,0,.9),0 0 18px rgba(0,0,0,.6)}
+.cred{font:400 13px/1.45 var(--sans);color:var(--silver)}
+.cred a{text-decoration:underline;text-decoration-color:rgba(166,157,144,.45);text-underline-offset:3px}
+.shot-cap{position:absolute;left:var(--gut);right:var(--gut);bottom:calc(env(safe-area-inset-bottom,0px) + 28px);display:grid;gap:8px;justify-items:center;text-align:center;z-index:1}
+@media (min-width:900px) and (orientation:landscape){
+  .shot{min-height:100svh;display:grid;align-content:center;gap:26px;padding-block:5svh}
+  .shot-frame{height:auto;aspect-ratio:2/1;max-height:calc(100svh - 190px);width:100%;max-width:100%}
+  .shot-frame::after{display:none}
+  .shot-cap{position:static}
+}
+
+/* rephotography stage */
+.rephoto{position:relative;height:340svh;background:var(--screen)}
+.rp-stage{position:sticky;top:0;height:100vh;height:100svh;display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;grid-template-rows:auto auto auto;
+  grid-template-areas:"frame frame frame" "old track now" "subs subs subs";
+  align-content:center;row-gap:16px;column-gap:14px;padding:calc(var(--bar-h) + 2px) 0 18px}
+.rp-frame{grid-area:frame;position:relative;justify-self:center;width:min(100%,calc((100svh - var(--bar-h) - 236px) * .7387));aspect-ratio:1080/1462;max-width:100%;overflow:hidden;background:#111}
+.rp-side.old{padding-left:var(--gut)}.rp-side.now{padding-right:var(--gut)}.rp-subs{padding-inline:var(--gut)}
+.rp-frame img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.rp-now{opacity:var(--mix,0)}
+.rp-frame .grain{opacity:calc(.34 - var(--mix,0) * .22)}
+.rp-side{display:grid;gap:4px;align-content:center}
+.rp-side.old{grid-area:old}
+.rp-side.now{grid-area:now;text-align:right;justify-items:end}
+.rp-year{font:400 clamp(40px,11vw,104px)/.95 var(--serif);transition:opacity .2s}
+.rp-side.old .rp-year{color:var(--sepia);opacity:calc(1 - var(--mix,0) * .62)}
+.rp-side.now .rp-year{color:var(--bone);opacity:calc(.38 + var(--mix,0) * .62)}
+.rp-side .cred{max-width:18ch}
+.rp-track{grid-area:track;align-self:center;position:relative;height:1px;background:var(--hair);min-width:40px}
+.rp-track span{position:absolute;top:-4px;left:calc(var(--mix,0) * 100%);width:9px;height:9px;margin-left:-4.5px;border-radius:50%;background:var(--lamp);box-shadow:0 0 12px rgba(245,176,76,.7)}
+.rp-track::before{content:"";position:absolute;left:0;top:0;height:1px;width:calc(var(--mix,0) * 100%);background:rgba(245,176,76,.6)}
+.rp-subs{grid-area:subs;position:relative;min-height:3.1em;display:grid}
+.rp-subs p{grid-area:1/1;opacity:0;transition:opacity .6s ease}
+.rp-subs p.on{opacity:1}
+.rp-subs small{display:block;margin-top:4px;font:400 14px/1.4 var(--sans);color:var(--silver);text-shadow:none}
+@media (min-width:900px) and (orientation:landscape){
+  .rp-stage{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);grid-template-areas:"old frame now" ". track ." "subs subs subs";column-gap:clamp(28px,4vw,72px);row-gap:22px;padding:calc(var(--bar-h) + 10px) var(--gut) 18px}
+  .rp-side.old,.rp-side.now,.rp-subs{padding-inline:0}
+  .rp-frame{height:auto;width:calc(min(calc(100svh - var(--bar-h) - 170px),860px) * 1080 / 1462)}
+  .rp-side.old{justify-items:end;text-align:right}
+  .rp-side.now{justify-items:start;text-align:left}
+  .rp-side .cred{max-width:22ch}
+  .rp-track{width:100%}
+}
+
+/* reading reels */
+.reel{background:var(--ground);position:relative}
+.reel.from-black{background:linear-gradient(var(--screen),var(--ground) 38vh)}
+.wrap{max-width:1320px;margin:0 auto;padding-inline:var(--gut)}
+.grid12{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));column-gap:clamp(16px,2vw,32px)}
+.label{font:400 15px/1.4 var(--sans);color:var(--silver)}
+.story{padding-block:clamp(88px,14vh,160px) clamp(64px,10vh,120px)}
+.narration{grid-column:1/-1;font:400 clamp(25px,2.65vw,38px)/1.38 var(--serif);text-wrap:pretty;max-width:26ch}
+.story .place{grid-column:1/-1;margin-top:28px}
+.doc{padding-block:clamp(40px,8vh,96px);align-items:center;row-gap:36px}
+.doc-stamp{grid-column:1/-1}
+.doc-stamp img{width:100%;height:auto;filter:drop-shadow(0 24px 40px rgba(0,0,0,.55))}
+.doc-quote{grid-column:1/-1;display:grid;gap:20px}
+.doc-quote blockquote{font:400 clamp(21px,1.85vw,27px)/1.5 var(--serif);text-indent:-.42em;text-wrap:pretty}
+.meaning{padding-block:clamp(64px,11vh,128px);row-gap:44px}
+.mean{grid-column:1/-1;display:grid;gap:12px;align-content:start}
+.mean p:last-child{font:400 clamp(22px,2vw,29px)/1.4 var(--serif);text-wrap:pretty}
+.course{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px 28px;padding-top:24px;border-top:1px solid var(--hair)}
+.course p{font:400 15px/1.5 var(--sans);color:var(--silver)}
+.course b{font-weight:500;color:var(--bone)}
+.plate{padding-block:clamp(56px,10vh,120px);row-gap:28px}
+.plate-img{grid-column:1/-1;margin-inline:calc(var(--gut) * -1)}
+.plate-img img{width:100%;height:auto}
+.plate-text{grid-column:1/-1;display:grid;gap:14px}
+.plate-text p.fact{font:400 clamp(22px,2vw,29px)/1.42 var(--serif);text-wrap:pretty}
+.next{padding-block:clamp(72px,12vh,140px) clamp(96px,16vh,180px);row-gap:40px;align-items:center}
+.next-text{grid-column:1/-1;display:grid;gap:16px;justify-items:start}
+.next-title{font:400 clamp(30px,2.9vw,44px)/1.1 var(--serif);text-wrap:balance}
+.next-title .n{color:var(--sepia)}
+.next-why{font:400 18px/1.55 var(--sans);max-width:36ch}
+.next-dist{font:400 15px/1.45 var(--sans);color:var(--silver)}
+.next-map{grid-column:1/-1}
+@media (min-width:900px){
+  .narration{grid-column:2/span 9}
+  .story .place{grid-column:2/span 6}
+  .doc-stamp{grid-column:1/span 6}
+  .doc-quote{grid-column:8/span 5}
+  .mean:nth-of-type(1){grid-column:2/span 5}
+  .mean:nth-of-type(2){grid-column:8/span 5}
+  .course{grid-column:2/span 11}
+  .plate-img{grid-column:2/span 10;margin-inline:0}
+  .plate-text{grid-column:2/span 10;grid-template-columns:minmax(0,1fr) minmax(0,2fr);column-gap:clamp(16px,2vw,32px);align-items:start}
+  .plate-text .cred{grid-column:2}
+  .next-text{grid-column:2/span 5}
+  .next-map{grid-column:7/span 6}
+}
+
+/* maps (shared) */
+.map{position:relative;overflow:hidden;background:#090b0f;max-width:100%}
+.map>img{position:absolute;max-width:none;height:auto;filter:brightness(2.1) contrast(1.06)}
+.map svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.map .lead{stroke:rgba(237,229,216,.45);stroke-width:1}
+.pin{position:absolute;transform:translate(-50%,-50%);width:24px;height:24px;border-radius:50%;display:grid;place-items:center;padding:0;
+  background:rgba(0,0,0,.72);border:1px solid rgba(237,229,216,.55);color:var(--bone);font:600 12px/1 var(--sans);cursor:pointer;transition:border-color .2s,color .2s,background .2s,transform .2s}
+.pin.cur,.pin.hi{border-color:var(--lamp);color:var(--lamp)}
+.pin.hi{transform:translate(-50%,-50%) scale(1.18);background:#000}
+.dot{position:absolute;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;border-radius:50%;background:var(--bone);pointer-events:none}
+.map-label{position:absolute;font:500 14px/1.25 var(--sans);color:var(--bone);text-shadow:0 1px 3px #000,0 0 10px #000;white-space:nowrap;pointer-events:none}
+.map-scale{position:absolute;left:14px;bottom:12px;font:400 12.5px/1 var(--sans);color:var(--silver);display:grid;gap:5px}
+.map-scale i{display:block;height:5px;border:1px solid rgba(237,229,216,.6);border-top:0}
+.map{aspect-ratio:var(--ar,4/3)}
+
+/* ——— 3. interlude ——— */
+.growth{position:relative;height:620svh;background:var(--screen)}
+.gr-stage{position:sticky;top:0;height:100vh;height:100svh;overflow:hidden;background:#040507}
+.gr-canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.gr-stage::after{content:"";position:absolute;inset:auto 0 0;height:44%;background:linear-gradient(rgba(4,5,7,0),rgba(4,5,7,.82) 62%);pointer-events:none}
+.gr-foot,.gr-head{z-index:1}
+.gr-head{position:absolute;left:var(--gut);right:var(--gut);top:calc(var(--bar-h) + 10px);display:grid;gap:10px;justify-items:start;max-width:36ch}
+.gr-head h2{font:400 clamp(34px,3.6vw,56px)/1.05 var(--serif)}
+.gr-head p{font:400 15.5px/1.45 var(--sans);color:var(--silver)}
+.gr-head .btn{min-height:44px;margin-top:4px}
+.gr-foot{position:absolute;left:var(--gut);right:var(--gut);bottom:calc(env(safe-area-inset-bottom,0px) + 14px);display:grid;gap:10px;
+  grid-template-areas:"year" "cap" "scrub" "note"}
+.gr-year{grid-area:year;display:grid;gap:6px}
+.gr-year .big{font:400 clamp(72px,11vw,168px)/.84 var(--serif);letter-spacing:-.01em;text-shadow:0 0 30px rgba(0,0,0,.8)}
+.gr-count{font:500 17px/1.3 var(--sans);color:var(--bone);text-shadow:0 1px 3px #000}
+.gr-cap{grid-area:cap;position:relative;display:grid;min-height:3em}
+.gr-cap p{grid-area:1/1;opacity:0;transition:opacity .7s;text-align:left;font:500 16.5px/1.45 var(--sans);text-shadow:0 1px 3px #000,0 0 14px #000;max-width:40ch}
+.gr-cap p.on{opacity:1}
+.gr-cap b{font-weight:600;color:var(--lamp)}
+.gr-scrub{grid-area:scrub;position:relative;height:22px}
+.gr-scrub .line{position:absolute;left:0;right:0;top:10px;height:1px;background:var(--hair)}
+.gr-scrub .fill{position:absolute;left:0;top:10px;height:1px;background:var(--lamp);width:calc(var(--t,0) * 100%)}
+.gr-scrub .tick{position:absolute;top:6px;width:1px;height:9px;background:rgba(237,229,216,.5)}
+.gr-scrub .tick.past{background:var(--lamp)}
+.gr-scrub .end{position:absolute;top:0;font:400 12.5px/1 var(--sans);color:var(--silver)}
+.gr-note{grid-area:note;font:400 13px/1.45 var(--sans);color:var(--silver);max-width:62ch}
+.gr-status{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font:400 15px/1.4 var(--sans);color:var(--silver);text-align:center}
+@media (min-width:900px) and (orientation:landscape){
+  .gr-stage::after{height:52%;width:62%;right:auto;background:radial-gradient(120% 100% at 0% 100%,rgba(4,5,7,.88) 30%,rgba(4,5,7,0) 72%)}
+  .gr-head{left:auto;right:var(--gut);justify-items:end;text-align:right}
+  .gr-foot{right:auto;width:min(540px,42vw);bottom:24px;gap:12px}
+  .gr-cap{min-height:3.2em}
+  .gr-cap p{font-size:18.5px}
+}
+
+/* ——— 4. index ——— */
+.index{padding-block:clamp(88px,14vh,150px) clamp(72px,10vh,120px)}
+.ix-head{display:grid;gap:12px;margin-bottom:clamp(32px,5vh,56px)}
+.ix-head h2{font:400 clamp(44px,5.6vw,84px)/1 var(--serif)}
+.ix-head p{font:400 16px/1.5 var(--sans);color:var(--silver);max-width:60ch}
+.ix-grid{display:grid;gap:36px}
+.ix-map .cred{margin-top:10px}
+.chapters{border-top:1px solid var(--hair)}
+.row{width:100%;display:grid;grid-template-columns:2.1em 64px minmax(0,1fr) auto;align-items:center;gap:14px;padding:12px 4px;background:none;border:0;border-bottom:1px solid var(--hair);text-align:left;cursor:pointer;transition:background .2s}
+.row:hover,.row.hi{background:rgba(237,229,216,.045)}
+.row-n{font:400 22px/1 var(--serif);color:var(--sepia);text-align:right}
+.row-thumb{width:64px;height:48px;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(237,229,216,.12)}
+.row-thumb img{width:100%;height:100%;object-fit:cover}
+.row-main{display:grid;gap:3px;min-width:0}
+.row-title{font:400 19px/1.25 var(--serif)}
+.row-place{font:400 13.5px/1.35 var(--sans);color:var(--silver)}
+.row-year{font:400 15px/1 var(--sans);color:var(--sepia);text-align:right;display:flex;align-items:center;gap:8px}
+.row-year i{width:7px;height:7px;border-radius:50%;background:var(--lamp);box-shadow:0 0 10px rgba(245,176,76,.8)}
+@media (min-width:980px){
+  .ix-grid{grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:clamp(32px,4vw,64px);align-items:start}
+  .ix-map{position:sticky;top:calc(var(--bar-h) + 28px)}
+}
+
+/* credits */
+.credits{padding-block:clamp(72px,12vh,140px) 64px;border-top:1px solid var(--hair)}
+.credits h2{font:400 clamp(30px,3vw,40px)/1.1 var(--serif);margin-bottom:32px}
+.cr-cols{display:grid;gap:28px}
+.cr-cols section{display:grid;gap:8px;align-content:start}
+.cr-cols h3{font:500 15px/1.4 var(--sans);color:var(--bone)}
+.cr-cols p{font:400 14px/1.55 var(--sans);color:var(--silver)}
+.cr-cols a{text-decoration:underline;text-decoration-color:rgba(166,157,144,.45);text-underline-offset:3px}
+.cr-end{margin-top:56px;font:400 14px/1.6 var(--sans);color:var(--silver)}
+@media (min-width:900px){.cr-cols{grid-template-columns:repeat(3,minmax(0,1fr));column-gap:48px}}
+
+/* work-in-progress chapter card */
+dialog.wip{width:100%;height:100%;max-width:none;max-height:none;margin:0;padding:0;border:0;background:var(--screen);color:var(--bone)}
+dialog.wip::backdrop{background:#000}
+dialog.wip[open]{animation:op-in .5s ease}
+.wip-in{min-height:100%;display:grid;place-content:center;justify-items:center;text-align:center;gap:clamp(12px,2vh,22px);padding:48px var(--gut)}
+.wip-status{margin-top:10px;font:400 15px/1.5 var(--sans);color:var(--silver);max-width:34ch}
+.wip-in form{margin-top:18px}
+
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .op-img{animation:op-in .01s forwards;transform:none}
+  .op-title h1,.op-sub,.op-actions,.op-foot{animation:op-in .01s forwards;filter:none}
+  .shot-frame img{transform:none}
+  .rp-subs p,.gr-cap p{transition:none}
+  dialog.wip[open]{animation:none}
+}
+</style>
+</head>
+<body>
+
+
+<header class="bar" id="bar">
+  <a class="wordmark" href="#top">Хроносфера</a>
+  <p class="bar-where" id="barWhere" aria-hidden="true"></p>
+  <nav class="bar-nav" aria-label="Разделы">
+    <a class="bar-link" href="#index">Оглавление</a>
+    <button class="icon-btn js-sound" type="button" aria-pressed="false" aria-label="Звук" title="Включить звук">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7.5h3l4-3.5v12l-4-3.5H3z" fill="currentColor" stroke="none"/><path class="wave" d="M13 7.2a4 4 0 0 1 0 5.6M15.4 5a7 7 0 0 1 0 10"/></svg>
+    </button>
+  </nav>
+</header>
+
+<main>
+<!-- ============ 1. OPENING ============ -->
+<section class="opening" id="top" data-scene="opening" aria-labelledby="op-title">
+  <div class="op-stage">
+    <div class="op-frame">
+      <img class="op-img" src="assets/film/opening-1600.webp" srcset="assets/film/opening-1600.webp 1600w, assets/film/opening-2560.webp 2560w" sizes="100vw" decoding="async" alt="Закат над Чёрным морем в Большом Сочи: солнечная дорожка на воде, у кромки прибоя силуэты людей" fetchpriority="high">
+      <div class="op-scrim"></div>
+      <div class="grain"></div>
+    </div>
+    <div class="op-title">
+      <h1 id="op-title">Хроносфера</h1>
+      <div class="op-sub">
+        <p class="l1">Как государство строило Сочи, 1838–2026</p>
+        <p class="l2">Документальный маршрут в&nbsp;двенадцати&nbsp;главах</p>
+      </div>
+      <div class="op-actions">
+        <a class="btn solid" href="#ch7"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2.5 1.2v11.6L12.4 7z" fill="currentColor"/></svg>Смотреть</a>
+        <button class="btn js-sound" type="button" aria-pressed="false" title="Включить звук">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true" style="width:18px;height:18px"><path d="M3 7.5h3l4-3.5v12l-4-3.5H3z" fill="currentColor" stroke="none"/><path class="wave" d="M13 7.2a4 4 0 0 1 0 5.6M15.4 5a7 7 0 0 1 0 10"/></svg>Звук
+        </button>
+      </div>
+    </div>
+    <div class="op-foot">
+      <p>Маршрут по&nbsp;курсу «Основы российской государственности», НИУ&nbsp;ВШЭ, 2026</p>
+      <p>Кадр: AndrewBaskakov, 2010, <a href="https://commons.wikimedia.org/wiki/File:%D0%97%D0%B0%D0%BA%D0%B0%D1%82_%D0%BD%D0%B0%D0%B4_%D0%A7%D1%91%D1%80%D0%BD%D1%8B%D0%BC_%D0%BC%D0%BE%D1%80%D0%B5%D0%BC_%D0%B2_%D0%B1%D0%BE%D0%BB%D1%8C%D1%88%D0%BE%D0%BC_%D0%A1%D0%BE%D1%87%D0%B8.jpg" target="_blank" rel="noopener">CC&nbsp;BY-SA&nbsp;3.0</a></p>
+    </div>
+    <div class="op-black"></div>
+  </div>
+</section>
+
+<!-- ============ 2. CHAPTER 7 ============ -->
+<article class="chapter" id="ch7" aria-labelledby="ch7-title" data-where="Глава 7 из&nbsp;12. Морской вокзал">
+  <header class="intertitle">
+    <p class="it-chapter">Глава седьмая</p>
+    <p class="it-year num" aria-label="1955 год">1955</p>
+    <h2 class="it-title" id="ch7-title">Морской вокзал</h2>
+    <p class="it-line">После войны курорту понадобились новые ворота&nbsp;— с&nbsp;моря.</p>
+    <span class="it-rule" aria-hidden="true"></span>
+    <p class="it-chapter">Морской порт Сочи</p>
+  </header>
+
+  <figure class="shot" data-scene="shot">
+    <div class="shot-frame">
+      <img src="assets/film/s07-establishing-1600.webp" srcset="assets/film/s07-establishing-1600.webp 1600w, assets/film/s07-establishing-2560.webp 2560w" sizes="100vw" decoding="async" alt="Морской вокзал Сочи на закате: освещённая башня со шпилем, аркада, яхты у причала отражаются в воде">
+    </div>
+    <figcaption class="shot-cap">
+      <p class="subtitle">Морской порт Сочи. Вечер, сегодня</p>
+      <p class="cred">Временный кадр до&nbsp;съёмки на&nbsp;точке. Фото: Carbonkidka, 2017, <a href="https://commons.wikimedia.org/wiki/File:%D0%9C%D0%BE%D1%80%D1%81%D0%BA%D0%BE%D0%B9_%D0%B2%D0%BE%D0%BA%D0%B7%D0%B0%D0%BB_%D0%A1%D0%BE%D1%87%D0%B8_%D0%BD%D0%B0_%D0%B7%D0%B0%D0%BA%D0%B0%D1%82%D0%B5.jpg" target="_blank" rel="noopener">CC&nbsp;BY-SA&nbsp;4.0</a></p>
+    </figcaption>
+  </figure>
+
+  <section class="rephoto" data-scene="rephoto" aria-label="Фонтан у Морского вокзала: 1957 год и сегодня">
+    <div class="rp-stage">
+      <div class="rp-frame">
+        <img class="rp-old" src="assets/film/s07-1957.webp" decoding="async" alt="1957 год: фонтан со скульптурой «Навигация» перед портиком Морского вокзала, у входа толпа">
+        <img class="rp-now" src="assets/film/s07-now-fountain.webp" decoding="async" alt="2014 год, та же точка: фонтан со скульптурой перед вокзалом в сумерках, в окнах свет">
+        <div class="grain"></div>
+      </div>
+      <div class="rp-side old">
+        <p class="rp-year num">1957</p>
+        <p class="cred">Архивный снимок, <a href="https://pastvu.com/p/2558141" target="_blank" rel="noopener">PastVu №&nbsp;2558141</a></p>
+      </div>
+      <div class="rp-track" aria-hidden="true"><span></span></div>
+      <div class="rp-side now">
+        <p class="rp-year num">2014</p>
+        <p class="cred">Фото: Юлия Небышинец, <a href="https://commons.wikimedia.org/wiki/File:%D0%A3_%D0%9C%D0%BE%D1%80%D1%81%D0%BA%D0%BE%D0%B3%D0%BE_%D0%B2%D0%BE%D0%BA%D0%B7%D0%B0%D0%BB%D0%B02.jpg" target="_blank" rel="noopener">CC&nbsp;BY-SA&nbsp;4.0</a></p>
+      </div>
+      <div class="rp-subs subtitle" aria-live="off">
+        <p class="on">Фонтан со&nbsp;скульптурой «Навигация» перед вокзалом, 1957&nbsp;год<small>Листайте: архивный снимок растворится в&nbsp;сегодняшнем</small></p>
+        <p>Одна точка съёмки, между кадрами 57&nbsp;лет</p>
+        <p>Тот же фонтан, 2014&nbsp;год<small>Пересъёмку 2026 года оператор сделает с&nbsp;этой&nbsp;же точки</small></p>
+      </div>
+    </div>
+  </section>
+
+  <div class="reel from-black">
+    <section class="story wrap grid12" aria-label="История">
+      <p class="narration">Вокзал со&nbsp;шпилем задумали ещё до&nbsp;войны, а&nbsp;открыли 15&nbsp;декабря 1955&nbsp;года. Он&nbsp;встречал теплоходы и&nbsp;стал визитной карточкой Сочи.</p>
+    </section>
+
+    <section class="doc wrap grid12" aria-label="Документ">
+      <figure class="doc-stamp">
+        <img src="assets/archive/stamp-2011.webp" decoding="async" alt="Почтовая марка России 2011 года «Сочи. Морской вокзал», 20 рублей, с купоном, на котором напечатан текст о здании" width="1400" height="483">
+      </figure>
+      <figure class="doc-quote">
+        <blockquote>«Здание Морского вокзала, построенное в&nbsp;1955 году по&nbsp;проекту К.&nbsp;С.&nbsp;Алабяна и&nbsp;Л.&nbsp;Б.&nbsp;Карлика, увенчано <span class="nw">71-метровой</span> башней со&nbsp;шпилем. Над тремя её&nbsp;ярусами установлены скульптуры, олицетворяющие времена года и&nbsp;стороны света».</blockquote>
+        <figcaption class="label">Текст на&nbsp;купоне почтовой марки «Сочи. Морской вокзал». Почта России, 2011</figcaption>
+      </figure>
+    </section>
+
+    <section class="meaning wrap grid12" aria-label="Значение">
+      <div class="mean">
+        <p class="label">Значение для Сочи</p>
+        <p>Символ города на&nbsp;открытках, марках и&nbsp;значках.</p>
+      </div>
+      <div class="mean">
+        <p class="label">Значение для России</p>
+        <p>Пример послевоенного восстановления и&nbsp;развития морского транспорта.</p>
+      </div>
+      <div class="course">
+        <p>Раздел курса: <b>2. Российское <span class="nw">государство-цивилизация</span></b></p>
+        <p>Ценность: <b>созидание и&nbsp;развитие</b></p>
+      </div>
+    </section>
+
+    <section class="plate wrap grid12" aria-label="Факт, который мало кто знает">
+      <figure class="plate-img">
+        <img src="assets/archive/s07-1952.webp" decoding="async" alt="1952–1953 годы: стройка Морского вокзала, ряды бетонных опор и лестницы-леса, за ними склон с деревьями и старые дома" width="1200" height="849">
+      </figure>
+      <div class="plate-text">
+        <p class="label">Факт, который мало кто знает</p>
+        <p class="fact">Стройку прервала война. На&nbsp;снимке 1952–1953 годов видно, как возводят стены и&nbsp;опоры здания.</p>
+        <p class="cred">Строительство Морского вокзала, 1952–1953. Фото: Соловьёв, МКУ «Архив города Сочи», <a href="https://pastvu.com/p/2095347" target="_blank" rel="noopener">PastVu №&nbsp;2095347</a></p>
+      </div>
+    </section>
+
+    <section class="next wrap grid12" data-scene="next" aria-labelledby="next-title">
+      <div class="next-text">
+        <p class="label">Следующая глава</p>
+        <h3 class="next-title" id="next-title"><span class="nw"><span class="n">8.</span> Тисо-самшитовая</span> роща</h3>
+        <p class="next-dist num">14&nbsp;км по&nbsp;прямой на&nbsp;юго-восток, подъём на&nbsp;95&nbsp;м</p>
+        <p class="next-why">Курорт рос, а&nbsp;вместе с&nbsp;ним&nbsp;— ответственность за&nbsp;природу вокруг него.</p>
+        <button class="btn" type="button" data-open="8"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2.5 1.2v11.6L12.4 7z" fill="currentColor"/></svg>Смотреть главу 8</button>
+      </div>
+      <div class="next-map">
+        <div class="map" id="nextMap" role="img" aria-label="Карта: путь от Морского вокзала в центре Сочи к Тисо-самшитовой роще в Хосте, 14 километров на юго-восток"></div>
+      </div>
+    </section>
+  </div>
+</article>
+
+<!-- ============ 3. INTERLUDE ============ -->
+<section class="growth" id="growth" data-scene="growth" aria-labelledby="gr-title" data-where="Интерлюдия. Как рос город">
+  <div class="gr-stage">
+    <canvas class="gr-canvas" id="grCanvas" aria-hidden="true"></canvas>
+    <p class="gr-status" id="grStatus">Загружаем 153&#8239;850 зданий</p>
+    <div class="gr-head">
+      <h2 id="gr-title">Как рос город</h2>
+      <p>Каждая точка&nbsp;— здание. Огонь зажигается в&nbsp;год, когда здание появилось.</p>
+      <button class="btn" type="button" id="grPlay"><svg viewBox="0 0 14 14" aria-hidden="true"><path class="ic-play" d="M2.5 1.2v11.6L12.4 7z" fill="currentColor"/></svg><span>Смотреть 20&nbsp;секунд</span></button>
+    </div>
+    <div class="gr-foot">
+      <div class="gr-year">
+        <p class="big num" aria-hidden="true"><span class="digits" id="grYear"><span>1</span><span>8</span><span>3</span><span>8</span></span></p>
+        <p class="gr-count num" id="grCount">7 зданий</p>
+      </div>
+      <div class="gr-cap" id="grCap" aria-live="polite"></div>
+      <div class="gr-scrub" id="grScrub" aria-hidden="true"><span class="line"></span><span class="fill"></span></div>
+      <p class="gr-note">До&nbsp;1986 года годы построек смоделированы от&nbsp;исторических центров к&nbsp;окраинам; 1986–2015&nbsp;— спутниковые данные DLR.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 4. MAP-INDEX ============ -->
+<div class="reel from-black">
+<section class="index wrap" id="index" aria-labelledby="ix-title" data-scene="index" data-where="Двенадцать глав маршрута">
+  <div class="ix-head">
+    <h2 id="ix-title">Оглавление</h2>
+    <p class="num">12 глав, около 124&nbsp;км по&nbsp;прямой, от&nbsp;уровня моря до&nbsp;2320&nbsp;м. В&nbsp;макете готова седьмая глава, остальные откроются титром «глава в&nbsp;работе».</p>
+  </div>
+  <div class="ix-grid">
+    <div class="ix-map">
+      <div class="map" id="ixMap" role="img" aria-label="Карта маршрута: 12 точек от устья реки Сочи до Роза Пика и «Сириуса», соединённые линией по порядку глав"></div>
+      <p class="cred">Рельеф: AWS Terrain Tiles, SRTM. Линия маршрута проведена по&nbsp;прямой между точками.</p>
+    </div>
+    <ol class="chapters" id="chapters"></ol>
+  </div>
+</section>
+
+<footer class="credits wrap" id="credits">
+  <h2>Титры</h2>
+  <div class="cr-cols">
+    <section>
+      <h3>Кадры</h3>
+      <p>Открывающий кадр: «Закат над Чёрным морем в&nbsp;большом Сочи», AndrewBaskakov, 2010, <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener">CC&nbsp;BY-SA&nbsp;3.0</a>, Wikimedia Commons.</p>
+      <p>Общий план главы&nbsp;7: «Морской вокзал Сочи на&nbsp;закате», Carbonkidka, 2017, <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC&nbsp;BY-SA&nbsp;4.0</a>.</p>
+      <p>Фонтан сегодня: «У&nbsp;Морского вокзала», Юлия Небышинец, 2014, <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC&nbsp;BY-SA&nbsp;4.0</a>; кадрирован и&nbsp;совмещён с&nbsp;архивным снимком.</p>
+    </section>
+    <section>
+      <h3>Архив и&nbsp;документ</h3>
+      <p>Фонтан «Навигация», 1957: <a href="https://pastvu.com/p/2558141" target="_blank" rel="noopener">PastVu №&nbsp;2558141</a>. Стройка вокзала, 1952–1953, фото Соловьёва, МКУ «Архив города Сочи»: <a href="https://pastvu.com/p/2095347" target="_blank" rel="noopener">PastVu №&nbsp;2095347</a>. Миниатюры оглавления&nbsp;— PastVu.</p>
+      <p>Марка «Сочи. Морской вокзал», Почта России (ИТЦ «Марка»), 2011; скан Андрея Крижановского, <a href="https://commons.wikimedia.org/wiki/File:Morskoi_vokzal_Sochi.jpg" target="_blank" rel="noopener">общественное достояние</a>.</p>
+    </section>
+    <section>
+      <h3>Карта и&nbsp;данные</h3>
+      <p>Рельеф: AWS Terrain Tiles&nbsp;© Mapzen; SRTM (NASA), GMTED (USGS), ETOPO1 (NOAA).</p>
+      <p>Здания: © участники OpenStreetMap (ODbL), сборка Protomaps. Годы 1986–2015: World Settlement Footprint Evolution © DLR, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC&nbsp;BY&nbsp;4.0</a>. До&nbsp;1986 года&nbsp;— модель роста.</p>
+      <p>Шрифты: Prata (Cyreal) и&nbsp;Golos Text (Paratype), лицензия OFL.</p>
+      <p>Звук: «On a&nbsp;pebble beach», earthcalling, <a href="https://commons.wikimedia.org/wiki/File:On_a_pebble_beach.ogg" target="_blank" rel="noopener">общественное достояние</a>, Wikimedia Commons; закольцован и&nbsp;выровнен по&nbsp;громкости. Временно, до&nbsp;записи прибоя у&nbsp;Морского вокзала.</p>
+    </section>
+  </div>
+  <p class="cr-end">Хроносфера. Маршрут по&nbsp;курсу «Основы российской государственности», НИУ&nbsp;ВШЭ, 2026. Макет «Кинохроники», сентябрь 2026.</p>
+</footer>
+</div>
+</main>
+
+<dialog class="wip" id="wip" aria-labelledby="wipTitle">
+  <div class="wip-in">
+    <p class="it-chapter" id="wipCh">Глава восьмая</p>
+    <p class="it-year num" id="wipYear">1931</p>
+    <h2 class="it-title" id="wipTitle">Тисо-самшитовая роща</h2>
+    <p class="it-line" id="wipLine"></p>
+    <p class="wip-status">Глава в&nbsp;работе: ждём кадры с&nbsp;точки съёмки.</p>
+    <form method="dialog"><button class="btn" type="submit">Вернуться</button></form>
+  </div>
+</dialog>
+<p class="sr-only" aria-live="polite" id="announce"></p>
+
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0)); return t * t * (3 - 2 * t); };
+const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+const wideMQ = matchMedia('(min-width: 900px) and (orientation: landscape)');
+const NB = ' ', NNB = ' ';
+
+/* ---------- data ---------- */
+const STOPS = [
+  { n: 1, id: 's01', title: 'Навагинское укрепление', place: 'Устье реки Сочи', since: 1838, lat: 43.5822, lon: 39.7212, thumb: 1, line: 'В 1838 году в устье реки Сочи высадился русский десант и заложил форт.' },
+  { n: 2, id: 's02', title: 'Дендрарий', place: 'Вилла «Надежда», Курортный проспект', since: 1892, lat: 43.57, lon: 39.745, line: 'Издатель «Петербургской газеты» Сергей Худеков превратил голый склон в парк с растениями со всего света.' },
+  { n: 3, id: 's03', title: '«Ривьера» и «Подвиг во имя жизни»', place: 'Парк «Ривьера»', since: 1898, lat: 43.59, lon: 39.718, thumb: 1, line: 'Парк «Ривьера» открыл в 1898 году купец Василий Хлудов.' },
+  { n: 4, id: 's04', title: 'Мацеста', place: 'Долина реки Мацесты', since: 1902, lat: 43.52, lon: 39.81, line: 'Первую лечебницу у сероводородных источников открыл в 1902 году врач Подгурский.' },
+  { n: 5, id: 's05', title: 'Гора Ахун', place: 'Смотровая башня Большого Ахуна', since: 1936, lat: 43.546, lon: 39.845, thumb: 1, line: 'Смотровую башню на вершине Большого Ахуна построили в 1936 году.' },
+  { n: 6, id: 's06', title: 'Зимний театр', place: 'Театральная улица, 2', since: 1937, lat: 43.573, lon: 39.729, thumb: 1, line: 'Театр с колоннадой построили в 1934–1937 годах по проекту архитектора Константина Чернопятова.' },
+  { n: 7, id: 's07', title: 'Морской вокзал', place: 'Морской порт Сочи', since: 1955, lat: 43.581, lon: 39.719, thumb: 1, ready: 1, line: 'После войны курорту понадобились новые ворота — с моря.' },
+  { n: 8, id: 's08', title: 'Тисо-самшитовая роща', place: 'Хоста, Кавказский заповедник', since: 1931, lat: 43.53, lon: 39.88, thumb: 1, line: 'Реликтовый лес из тиса и самшита вошёл в Кавказский заповедник в 1931 году.' },
+  { n: 9, id: 's09', title: 'Красная Поляна', place: 'Урочище Кбаадэ', since: 1864, lat: 43.68, lon: 40.205, thumb: 1, line: 'В мае 1864 года в урочище Кбаадэ официально завершилась Кавказская война.' },
+  { n: 10, id: 's10', title: 'Роза Пик', place: 'Хребет Аибга, 2320 м', since: 2014, lat: 43.62, lon: 40.29, line: 'Смотровая площадка на хребте Аибга, на высоте 2320 метров над морем.' },
+  { n: 11, id: 's11', title: 'Олимпийский парк', place: 'Имеретинская низменность', since: 2014, lat: 43.402, lon: 39.956, line: 'XXII зимние Олимпийские игры прошли в Сочи 7–23 февраля 2014 года.' },
+  { n: 12, id: 's12', title: '«Сириус»', place: 'Федеральная территория «Сириус»', since: 2015, lat: 43.413, lon: 39.967, line: 'Образовательный центр для одарённых школьников открылся в 2015 году в олимпийских зданиях.' }
+];
+const ORD = ['первая', 'вторая', 'третья', 'четвёртая', 'пятая', 'шестая', 'седьмая', 'восьмая', 'девятая', 'десятая', 'одиннадцатая', 'двенадцатая'];
+// Russian typography: bind short words to the next one, and the dash to the previous word
+const nwrap = (s) => s.replace(/([А-Яа-яЁё0-9«»]+-[А-Яа-яЁё«»]+)/g, '<span class="nw">$1</span>');
+const typo = (s) => s.replace(/(^|[\s(«])([а-яёА-ЯЁ]{1,2})\s/g, `$1$2${NB}`).replace(/(^|[\s(«])([а-яёА-ЯЁ]{1,2})\s/g, `$1$2${NB}`).replace(/\s—/g, `${NB}—`);
+
+/* ---------- projection: same bbox as buildings.wasm and the hillshade ---------- */
+const BB = { w: 39.05, e: 40.45, s: 43.38, n: 44.12 };
+const merc = (lat) => Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360));
+const MN = merc(BB.n), MS = merc(BB.s);
+const nx = (lon) => (lon - BB.w) / (BB.e - BB.w);
+const ny = (lat) => (MN - merc(lat)) / (MN - MS);
+const ASPECT = ((BB.e - BB.w) * Math.PI / 180) / (MN - MS); // width/height of the bbox in square units
+const HS = { src: 'assets/terrain/hillshade.webp', w: 3200, h: 2341 };
+
+/* ---------- preload: fetch and decode the rest of the film in the background, in viewing order ---------- */
+const PRELOAD = ['assets/film/s07-establishing-' + (innerWidth * devicePixelRatio > 1700 ? '2560' : '1600') + '.webp', 'assets/film/s07-1957.webp', 'assets/film/s07-now-fountain.webp', 'assets/archive/stamp-2011.webp', 'assets/archive/s07-1952.webp', 'assets/terrain/hillshade.webp'];
+(async () => {
+  const op = document.querySelector('.op-img'); try { if (op && !op.complete) await new Promise((r) => { op.addEventListener('load', r, { once: true }); op.addEventListener('error', r, { once: true }); }); } catch (e) {}
+  for (const src of PRELOAD) { const im = new Image(); im.decoding = 'async'; im.src = src; try { await im.decode(); } catch (e) { /* keep going */ } }
+  try { await fetch('assets/city/buildings.wasm'); } catch (e) { /* the interlude loads it again on demand */ }
+})();
+
+/* ---------- sound: a real recording of surf on a pebble beach, seamless loop (starts only on a click) ---------- */
+const sound = { ctx: null, master: null, on: false };
+async function buildSurf() {
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* older Safari */ }
+  const ctx = new AC(); const master = ctx.createGain(); master.gain.value = 0; master.connect(ctx.destination);
+  sound.ctx = ctx; sound.master = master; // created synchronously inside the click
+  try {
+    const data = await (await fetch('assets/audio/sea-pebble-loop.mp3')).arrayBuffer();
+    const buf = await new Promise((res, rej) => ctx.decodeAudioData(data, res, rej));
+    const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+    src.loopStart = 0.03; src.loopEnd = Math.max(1, buf.duration - 0.03); // skip mp3 encoder padding
+    src.connect(master); src.start(0, 0.03);
+  } catch (e) { $('#announce').textContent = 'Звук не загрузился'; }
+}
+function setSound(on) {
+  if (on && !sound.ctx) buildSurf();
+  if (on && !sound.ctx) return;
+  sound.on = on;
+  if (sound.ctx) {
+    if (on) sound.ctx.resume();
+    sound.master.gain.cancelScheduledValues(sound.ctx.currentTime);
+    sound.master.gain.setTargetAtTime(on ? 0.6 : 0, sound.ctx.currentTime, on ? 1.2 : 0.3);
+  }
+  $$('.js-sound').forEach((b) => { b.setAttribute('aria-pressed', String(on)); b.title = on ? 'Выключить звук' : 'Включить звук'; });
+  $('#announce').textContent = on ? 'Звук включён' : 'Звук выключен';
+}
+$$('.js-sound').forEach((b) => b.addEventListener('click', () => setSound(!sound.on)));
+
+/* ---------- maps (next-chapter map and index map share this) ---------- */
+function makeMap(el, crop, opts = {}) {
+  const x0 = nx(crop.w) * HS.w, x1 = nx(crop.e) * HS.w, y0 = ny(crop.n) * HS.h, y1 = ny(crop.s) * HS.h;
+  const cw = x1 - x0, ch = y1 - y0;
+  el.style.setProperty('--ar', (cw / ch).toFixed(4));
+  const img = new Image(); img.alt = ''; img.src = HS.src; img.decoding = 'async';
+  img.style.width = (HS.w / cw * 100) + '%'; img.style.left = (-x0 / cw * 100) + '%'; img.style.top = (-y0 / ch * 100) + '%';
+  el.appendChild(img);
+  const P = (lon, lat) => [(nx(lon) * HS.w - x0) / cw, (ny(lat) * HS.h - y0) / ch]; // 0..1 in the crop
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg'); svg.setAttribute('viewBox', '0 0 1000 1000'); svg.setAttribute('preserveAspectRatio', 'none'); svg.setAttribute('aria-hidden', 'true');
+  el.appendChild(svg);
+  const lead = document.createElementNS(svgNS, 'svg'); lead.setAttribute('aria-hidden', 'true'); el.appendChild(lead);
+  const path = (pts, attrs) => { const p = document.createElementNS(svgNS, 'path'); p.setAttribute('d', pts.map((q, i) => (i ? 'L' : 'M') + (q[0] * 1000).toFixed(1) + ' ' + (q[1] * 1000).toFixed(1)).join(' ')); p.setAttribute('vector-effect', 'non-scaling-stroke'); p.setAttribute('fill', 'none'); for (const k in attrs) p.setAttribute(k, attrs[k]); svg.appendChild(p); return p; };
+  return { el, P, path, svg, lead, crop };
+}
+
+// label layout: keep pins off each other, draw leader lines to their true positions
+function layoutPins(map, pins, size) {
+  const W = map.el.clientWidth, H = map.el.clientHeight; if (!W) return;
+  const pts = pins.map((p) => { const [u, v] = map.P(p.lon, p.lat); return { p, ax: u * W, ay: v * H, x: u * W, y: v * H }; });
+  const D = size + 5;
+  for (let it = 0; it < 220; it++) {
+    for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) {
+      const a = pts[i], b = pts[j]; let dx = b.x - a.x, dy = b.y - a.y; let d = Math.hypot(dx, dy);
+      if (d < 0.01) { const ang = (i * 2.4 + j) ; dx = Math.cos(ang); dy = Math.sin(ang); d = 1; }
+      if (d < D) { const push = (D - d) / 2; a.x -= dx / d * push; a.y -= dy / d * push; b.x += dx / d * push; b.y += dy / d * push; }
+    }
+    for (const q of pts) { q.x += (q.ax - q.x) * 0.02; q.y += (q.ay - q.y) * 0.02; q.x = clamp(q.x, size / 2 + 2, W - size / 2 - 2); q.y = clamp(q.y, size / 2 + 2, H - size / 2 - 2); }
+  }
+  map.lead.setAttribute('viewBox', `0 0 ${W} ${H}`); map.lead.innerHTML = '';
+  for (const q of pts) {
+    q.p.el.style.left = q.x + 'px'; q.p.el.style.top = q.y + 'px';
+    if (q.p.dot) { q.p.dot.style.left = q.ax + 'px'; q.p.dot.style.top = q.ay + 'px'; }
+    const off = Math.hypot(q.x - q.ax, q.y - q.ay) > 6;
+    if (q.p.dot) q.p.dot.hidden = !off;
+    if (off) { const l = document.createElementNS('http://www.w3.org/2000/svg', 'line'); l.setAttribute('x1', q.ax); l.setAttribute('y1', q.ay); l.setAttribute('x2', q.x); l.setAttribute('y2', q.y); l.setAttribute('class', 'lead'); map.lead.appendChild(l); }
+  }
+}
+
+// next-chapter map: 7 -> 8
+const nextMap = (() => {
+  const el = $('#nextMap');
+  const m = makeMap(el, { w: 39.66, e: 39.93, n: 43.622, s: 43.476 });
+  const [a, b] = [STOPS[6], STOPS[7]];
+  const prev = STOPS.slice(2, 7).map((s) => m.P(s.lon, s.lat));
+  m.path(prev, { stroke: 'rgba(237,229,216,.32)', 'stroke-width': '1', 'stroke-dasharray': '2 4' });
+  const seg = m.path([m.P(a.lon, a.lat), m.P(b.lon, b.lat)], { stroke: '#f5b04c', 'stroke-width': '2', 'stroke-linecap': 'round', pathLength: '1', 'stroke-dasharray': '1 1', 'stroke-dashoffset': reduced.matches ? '0' : '1' });
+  const pins = [a, b].map((s) => { const e = document.createElement('span'); e.className = 'pin' + (s.n === 7 ? ' cur' : ''); e.textContent = s.n; e.setAttribute('aria-hidden', 'true'); el.appendChild(e); return { lon: s.lon, lat: s.lat, el: e }; });
+  const lab = (s, text, dx, dy, right) => { const e = document.createElement('span'); e.className = 'map-label'; e.textContent = text; el.appendChild(e); return { s, e, dx, dy, right }; };
+  const labels = [lab(a, 'Морской вокзал', -16, -30, true), lab(b, 'Тисо-самшитовая роща', 0, 20, false)];
+  const dist = document.createElement('span'); dist.className = 'map-label'; dist.style.color = '#f5b04c'; dist.textContent = '14 км'; el.appendChild(dist);
+  const scale = document.createElement('div'); scale.className = 'map-scale';
+  const kmPx = 1000 / (111320 * Math.cos(43.55 * Math.PI / 180) * (m.crop.e - m.crop.w)); // fraction of width per km
+  scale.innerHTML = `<span>5${NB}км</span><i style="width:${(kmPx * 5 * 100).toFixed(2)}%"></i>`; scale.style.width = '100%'; el.appendChild(scale);
+  scale.querySelector('i').style.width = (kmPx * 5 * 100).toFixed(2) + '%';
+  function layout() {
+    const W = el.clientWidth, H = el.clientHeight; layoutPins(m, pins, 24);
+    for (const l of labels) { const [u, v] = m.P(l.s.lon, l.s.lat); const x = u * W, y = v * H, lw = l.e.offsetWidth; l.e.style.top = (y + l.dy) + 'px'; let left = l.right ? x - lw + 8 : x - 40; left = clamp(left, 10, W - lw - 10); l.e.style.left = left + 'px'; }
+    const [u1, v1] = m.P(a.lon, a.lat), [u2, v2] = m.P(b.lon, b.lat);
+    dist.style.left = (((u1 + u2) / 2) * W + 6) + 'px'; dist.style.top = (((v1 + v2) / 2) * H - 26) + 'px';
+  }
+  return { el, seg, layout };
+})();
+
+// index map + list
+const ixMap = (() => {
+  const el = $('#ixMap');
+  const m = makeMap(el, { w: 39.585, e: 40.335, n: 43.745, s: 43.358 });
+  el.parentElement.style.setProperty('--ar', el.style.getPropertyValue('--ar'));
+  const route = m.path(STOPS.map((s) => m.P(s.lon, s.lat)), { stroke: '#f5b04c', 'stroke-width': '1.4', 'stroke-linejoin': 'round', opacity: '.85', pathLength: '1', 'stroke-dasharray': '1 1', 'stroke-dashoffset': reduced.matches ? '0' : '1' });
+  const pins = STOPS.map((s) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'pin' + (s.ready ? ' cur' : ''); b.textContent = s.n;
+    b.setAttribute('aria-label', `Глава ${s.n}: ${s.title}, ${s.since}`); b.dataset.open = s.n; el.appendChild(b);
+    const d = document.createElement('span'); d.className = 'dot'; d.hidden = true; el.appendChild(d);
+    return { lon: s.lon, lat: s.lat, el: b, dot: d, s };
+  });
+  const list = $('#chapters');
+  for (const s of STOPS) {
+    const li = document.createElement('li');
+    li.innerHTML = `<button class="row" type="button" data-open="${s.n}">
+      <span class="row-n">${s.n}</span>
+      <span class="row-thumb">${s.thumb ? `<img src="assets/thumbs/${s.id}.jpg" alt="" loading="lazy" width="64" height="48">` : ''}</span>
+      <span class="row-main"><span class="row-title">${nwrap(typo(s.title))}</span><span class="row-place">${typo(s.place)}</span></span>
+      <span class="row-year num">${s.ready ? '<i aria-label="глава готова"></i>' : ''}${s.since}</span></button>`;
+    list.appendChild(li);
+  }
+  const hi = (n, on) => { pins.forEach((p) => p.el.classList.toggle('hi', on && p.s.n === n)); $$('.row', list).forEach((r) => r.classList.toggle('hi', on && +r.dataset.open === n)); };
+  for (const el2 of [...pins.map((p) => p.el), ...$$('.row', list)]) {
+    const n = +el2.dataset.open;
+    el2.addEventListener('mouseenter', () => hi(n, true)); el2.addEventListener('mouseleave', () => hi(n, false));
+    el2.addEventListener('focus', () => hi(n, true)); el2.addEventListener('blur', () => hi(n, false));
+  }
+  return { el, route, layout: () => layoutPins(m, pins, innerWidth < 600 ? 21 : 24) };
+})();
+
+/* ---------- chapter opening: chapter 7 scrolls, others show the work-in-progress intertitle ---------- */
+const wip = $('#wip');
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-open]'); if (!t) return;
+  const s = STOPS[+t.dataset.open - 1];
+  if (s.ready) { $('#ch7').scrollIntoView({ behavior: reduced.matches ? 'auto' : 'smooth' }); return; }
+  $('#wipCh').textContent = 'Глава ' + ORD[s.n - 1]; $('#wipYear').textContent = s.since; $('#wipTitle').innerHTML = nwrap(s.title); $('#wipLine').textContent = typo(s.line);
+  if (typeof wip.showModal === 'function') wip.showModal(); else wip.setAttribute('open', '');
+});
+
+/* ---------- interlude: 153 850 buildings as light ---------- */
+const growth = (() => {
+  const canvas = $('#grCanvas'), status = $('#grStatus');
+  const KEYS = [ // scroll progress -> year
+    [0, 1838], [0.06, 1838], [0.24, 1900], [0.44, 1950], [0.84, 2014], [0.96, 2026], [1, 2026]];
+  const CAPS = [
+    [1838, `<b>1838.</b> В${NB}устье реки Сочи заложено укрепление. С${NB}него начинается город.`],
+    [1896, `<b>1896.</b> Посад у${NB}бывшего укрепления получает название Сочи.`],
+    [1934, `<b>1930-е.</b> Для всесоюзной здравницы разрабатывают генплан: санатории, парки, Зимний театр.`],
+    [1955, `<b>1955.</b> Открыт Морской вокзал. У${NB}курорта появились ворота с${NB}моря.`],
+    [2014, `<b>2014.</b> Олимпийский парк вырос на${NB}месте сельских угодий Имеретинской низменности.`]
+  ];
+  const capEl = $('#grCap');
+  capEl.innerHTML = CAPS.map((c) => `<p>${c[1]}</p>`).join('');
+  const capPs = $$('p', capEl);
+  const scrub = $('#grScrub');
+  const Y0 = 1838, Y1 = 2026;
+  scrub.insertAdjacentHTML('beforeend', CAPS.map((c) => `<span class="tick" style="left:${((c[0] - Y0) / (Y1 - Y0) * 100).toFixed(2)}%"></span>`).join('') +
+    '');
+  const ticks = $$('.tick', scrub);
+  const yearEl = $('#grYear'), countEl = $('#grCount');
+  const yearFor = (p) => { for (let i = 1; i < KEYS.length; i++) if (p <= KEYS[i][0]) { const [p0, y0] = KEYS[i - 1], [p1, y1] = KEYS[i]; return p1 === p0 ? y1 : lerp(y0, y1, (p - p0) / (p1 - p0)); } return Y1; };
+  const plural = (n) => { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? 'здание' : a >= 2 && a <= 4 && (b < 12 || b > 14) ? 'здания' : 'зданий'; };
+  const fmt = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, NNB);
+
+  let gl, progT, progP, bufN = 0, years = null, tex = null, ready = false, texReady = false, curYear = Y0, started = false;
+  // camera: from the fort in 1838 to all of Greater Sochi in 2026
+  const view = (t) => {
+    const wide = wideMQ.matches;
+    const a = wide ? { lon: 39.724, lat: 43.583, span: 0.16 } : { lon: 39.722, lat: 43.574, span: 0.085 };
+    const b = wide ? { lon: 39.70, lat: 43.62, span: 1.40 } : { lon: 39.90, lat: 43.515, span: 0.80 };
+    const k = smooth(0, 1, t);
+    return { lon: lerp(a.lon, b.lon, k), lat: lerp(a.lat, b.lat, k), span: Math.exp(lerp(Math.log(a.span), Math.log(b.span), k)) };
+  };
+  const zoomT = (y) => smooth(1860, 2000, y) * 0.9 + smooth(2000, 2026, y) * 0.1;
+
+  function compile(vs, fs) {
+    const p = gl.createProgram();
+    for (const [type, src] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]) { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); gl.attachShader(p, s); }
+    gl.linkProgram(p); if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p)); return p;
+  }
+  function init() {
+    if (started) return; started = true;
+    gl = canvas.getContext('webgl', { antialias: false, alpha: false, premultipliedAlpha: false });
+    if (!gl) { status.textContent = 'Для этой сцены нужен WebGL: включите его в настройках браузера.'; return; }
+    progT = compile(`attribute vec2 a;uniform vec4 v;varying vec2 uv;void main(){uv=a;vec2 t=(a-v.xy)/(v.zw-v.xy);gl_Position=vec4(t.x*2.-1.,1.-t.y*2.,0.,1.);}`,
+      `precision mediump float;uniform sampler2D tx;uniform vec2 res;uniform float br;varying vec2 uv;void main(){float ef=smoothstep(0.,.03,uv.x)*smoothstep(1.,.97,uv.x)*smoothstep(0.,.03,uv.y)*smoothstep(1.,.95,uv.y);vec3 c=mix(vec3(.016,.02,.027),texture2D(tx,uv).rgb*br,ef);vec2 q=gl_FragCoord.xy/res;float vg=smoothstep(0.,.26,q.y)*smoothstep(1.,.70,q.y)*mix(.55,1.,smoothstep(0.,.18,min(q.x,1.-q.x)));gl_FragColor=vec4(c*mix(.18,1.,vg),1.);}`);
+    progP = compile(`attribute vec4 a;uniform vec4 v;uniform float yr,ppm,dpr,halo,gain;varying float al,fr;
+      void main(){vec2 t=(a.xy-v.xy)/(v.zw-v.xy);gl_Position=vec4(t.x*2.-1.,1.-t.y*2.,0.,1.);
+      float age=yr-a.z;float vis=step(0.,age);fr=vis*exp(-age/4.5);float s=a.w*ppm;
+      float ps=clamp(s*2.4+2.6*dpr,2.*dpr,34.*dpr)*(1.+.9*fr);
+      gl_PointSize=vis*mix(ps,ps*3.4+7.*dpr,halo);
+      al=gain*vis*clamp(.15+s*.09,.15,.7)*(1.+2.1*fr)*mix(1.,.06,halo);}`,
+      `precision mediump float;varying float al,fr;uniform vec3 c0,c1;void main(){vec2 d=gl_PointCoord-.5;float r=dot(d,d)*4.;if(r>1.)discard;float g=exp(-r*3.6)-.027;gl_FragColor=vec4(mix(c0,c1,fr*.85)*g*al,1.);}`);
+    // terrain quad
+    const q = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, q); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]), gl.STATIC_DRAW); init.quad = q;
+    const img = new Image(); img.onload = () => {
+      tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, img);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      texReady = true; draw();
+    }; img.src = HS.src;
+    fetch('assets/city/buildings.wasm').then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); }).then((ab) => {
+      const f = new Float32Array(ab); const N = f.length / 8; const out = new Float32Array(N * 4); years = new Float32Array(N);
+      for (let i = 0; i < N; i++) { const o = i * 8; out[i * 4] = nx(f[o]); out[i * 4 + 1] = ny(f[o + 1]); out[i * 4 + 2] = f[o + 7]; out[i * 4 + 3] = Math.sqrt(Math.max(1, f[o + 2] * f[o + 3])); years[i] = f[o + 7]; }
+      const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, out, gl.STATIC_DRAW); init.pts = b; bufN = N;
+      ready = true; status.hidden = true; lastYearInt = -1; set(lastP);
+    }).catch(() => { status.textContent = 'Не удалось загрузить данные о зданиях. Обновите страницу.'; });
+  }
+  const upper = (y) => { let lo = 0, hi = bufN; while (lo < hi) { const m = (lo + hi) >> 1; if (years[m] <= y) lo = m + 1; else hi = m; } return lo; };
+  function draw() {
+    if (!gl) return;
+    const dpr = Math.min(2, devicePixelRatio || 1), W = Math.round(canvas.clientWidth * dpr), H = Math.round(canvas.clientHeight * dpr);
+    if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+    gl.viewport(0, 0, W, H); gl.clearColor(4 / 255, 5 / 255, 7 / 255, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+    const cam = view(zoomT(curYear));
+    const wx = cam.span / (BB.e - BB.w), wy = wx * (H / W) * ASPECT, cx = nx(cam.lon), cy = ny(cam.lat);
+    const v = [cx - wx / 2, cy - wy / 2, cx + wx / 2, cy + wy / 2];
+    if (texReady) {
+      gl.useProgram(progT); gl.disable(gl.BLEND); gl.bindBuffer(gl.ARRAY_BUFFER, init.quad);
+      const la = gl.getAttribLocation(progT, 'a'); gl.enableVertexAttribArray(la); gl.vertexAttribPointer(la, 2, gl.FLOAT, false, 0, 0);
+      gl.uniform4fv(gl.getUniformLocation(progT, 'v'), v); gl.uniform2f(gl.getUniformLocation(progT, 'res'), W, H); gl.uniform1f(gl.getUniformLocation(progT, 'br'), 1.15);
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex); gl.uniform1i(gl.getUniformLocation(progT, 'tx'), 0);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); gl.disableVertexAttribArray(la);
+    }
+    if (ready) {
+      const n = upper(curYear);
+      gl.useProgram(progP); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); gl.bindBuffer(gl.ARRAY_BUFFER, init.pts);
+      const la = gl.getAttribLocation(progP, 'a'); gl.enableVertexAttribArray(la); gl.vertexAttribPointer(la, 4, gl.FLOAT, false, 16, 0);
+      const metersAcross = cam.span * 111320 * Math.cos(cam.lat * Math.PI / 180);
+      gl.uniform4fv(gl.getUniformLocation(progP, 'v'), v); gl.uniform1f(gl.getUniformLocation(progP, 'yr'), curYear);
+      gl.uniform1f(gl.getUniformLocation(progP, 'ppm'), W / metersAcross); gl.uniform1f(gl.getUniformLocation(progP, 'dpr'), dpr);
+      gl.uniform3f(gl.getUniformLocation(progP, 'c0'), 1.0, 0.62, 0.24); gl.uniform3f(gl.getUniformLocation(progP, 'c1'), 1.0, 0.93, 0.8);
+      const uh = gl.getUniformLocation(progP, 'halo');
+      const ppmCss = (W / dpr) / metersAcross; // css px per metre
+      gl.uniform1f(gl.getUniformLocation(progP, 'gain'), clamp(0.5 + ppmCss * 4.5, 0.5, 0.95) * (wideMQ.matches ? 1 : 0.8));
+      if (n) { gl.uniform1f(uh, 1); gl.drawArrays(gl.POINTS, 0, n); gl.uniform1f(uh, 0); gl.drawArrays(gl.POINTS, 0, n); }
+      gl.disableVertexAttribArray(la);
+    }
+  }
+  let lastYearInt = -1, lastCap = -2, lastP = 0;
+  function set(p) {
+    lastP = p; curYear = yearFor(p);
+    const yi = Math.floor(curYear);
+    if (yi !== lastYearInt) {
+      lastYearInt = yi;
+      String(yi).split('').forEach((d, i) => { yearEl.children[i].textContent = d; });
+      const n = years ? upper(yi) : 0;
+      countEl.textContent = years ? `${fmt(n)}${NB}${plural(n)}` : '';
+      let ci = -1; CAPS.forEach((c, i) => { if (yi >= c[0]) ci = i; });
+      if (ci !== lastCap) { capPs.forEach((pp, i) => pp.classList.toggle('on', i === ci)); lastCap = ci; }
+      ticks.forEach((t, i) => t.classList.toggle('past', yi >= CAPS[i][0]));
+      scrub.style.setProperty('--t', ((curYear - Y0) / (Y1 - Y0)).toFixed(4));
+    }
+    draw();
+  }
+  // autoplay: drives the page scroll through the sticky range in 20 seconds
+  const btn = $('#grPlay'), sec = $('#growth'); let playing = false, raf = 0;
+  const label = btn.querySelector('span'), icon = btn.querySelector('path');
+  const PLAY = 'M2.5 1.2v11.6L12.4 7z', PAUSE = 'M2.5 1.5h3.2v11H2.5zM8.3 1.5h3.2v11H8.3z';
+  function stop() { playing = false; cancelAnimationFrame(raf); label.textContent = `Смотреть 20${NB}секунд`; icon.setAttribute('d', PLAY); }
+  function play() {
+    const r = sec.getBoundingClientRect(), top = scrollY + r.top, len = r.height - innerHeight;
+    let p0 = clamp(-r.top / len); if (p0 > 0.97) p0 = 0;
+    playing = true; label.textContent = 'Пауза'; icon.setAttribute('d', PAUSE);
+    const t0 = performance.now(), dur = 20000 * (1 - p0);
+    const step = (now) => { if (!playing) return; const k = clamp((now - t0) / dur); window.scrollTo({ top: top + (p0 + (1 - p0) * k) * len, behavior: 'instant' }); if (k < 1) raf = requestAnimationFrame(step); else stop(); };
+    raf = requestAnimationFrame(step);
+  }
+  btn.addEventListener('click', () => (playing ? stop() : play()));
+  for (const ev of ['wheel', 'touchstart', 'keydown']) addEventListener(ev, (e) => { if (playing && !(ev === 'keydown' && e.target === btn)) stop(); }, { passive: true });
+  new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) init(); }, { rootMargin: '400% 0px' }).observe(sec);
+  return { set, draw, init };
+})();
+
+/* ---------- scroll scenes ---------- */
+const scenes = $$('[data-scene]');
+const where = $('#barWhere'), bar = $('#bar');
+let ticking = false;
+function frame() {
+  ticking = false;
+  const vh = innerHeight;
+  document.body.classList.toggle('at-opening', scrollY < vh * 0.9);
+  const under = document.elementFromPoint(innerWidth / 2, 62); bar.classList.toggle('solid', !!(under && under.closest('.reel')));
+  let label = '';
+  for (const el of scenes) {
+    const r = el.getBoundingClientRect(); const kind = el.dataset.scene;
+    if (r.bottom < -vh || r.top > vh * 2) continue;
+    const pin = clamp(-r.top / Math.max(1, r.height - vh));      // progress through a sticky section
+    const pass = clamp((vh - r.top) / (vh + r.height));          // progress while passing the viewport
+    if (kind === 'opening') el.style.setProperty('--p', pin.toFixed(4));
+    else if (kind === 'shot') el.style.setProperty('--p', pass.toFixed(4));
+    else if (kind === 'rephoto') {
+      const mix = smooth(0.16, 0.8, pin); el.style.setProperty('--mix', mix.toFixed(4));
+      const subs = el.querySelectorAll('.rp-subs p'); const k = mix < 0.08 ? 0 : mix < 0.9 ? 1 : 2; subs.forEach((s, i) => s.classList.toggle('on', i === k));
+    } else if (kind === 'growth') growth.set(pin);
+    else if (kind === 'next') { if (!reduced.matches) nextMap.seg.setAttribute('stroke-dashoffset', (1 - smooth(0.15, 0.55, pass)).toFixed(3)); }
+    else if (kind === 'index') { if (!reduced.matches) ixMap.route.setAttribute('stroke-dashoffset', (1 - smooth(0.05, 0.42, pass)).toFixed(3)); }
+  }
+  for (const el of $$('[data-where]')) { const r = el.getBoundingClientRect(); if (r.top < vh * 0.5 && r.bottom > vh * 0.5) label = el.dataset.where; }
+  where.textContent = label;
+}
+const onScroll = () => { if (!ticking) { ticking = true; requestAnimationFrame(frame); } };
+addEventListener('scroll', onScroll, { passive: true });
+addEventListener('resize', () => { nextMap.layout(); ixMap.layout(); onScroll(); growth.draw(); });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { nextMap.layout(); ixMap.layout(); });
+addEventListener('load', () => { nextMap.layout(); ixMap.layout(); onScroll(); });
+nextMap.layout(); ixMap.layout(); frame();
+
+/* hooks for the screenshot script */
+window.__kino = { growth, scenes };
+})();
+</script>
+
+</body>
+</html>
