@@ -135,6 +135,7 @@ function CoachBody() {
           focus: scenario.focus,
           level: "B1",
           tipsSeen: history.flatMap((t) => (t.tip ? [t.tip.title] : [])),
+          ledger: history.flatMap((t) => (t.correction ? [{ wrong: t.correction.wrong, right: t.correction.right }] : [])),
         },
         ctrl.signal,
       );

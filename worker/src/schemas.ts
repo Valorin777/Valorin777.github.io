@@ -53,6 +53,11 @@ export const CoachBodySchema = z.strictObject({
   level: z.enum(["B1", "B2"]),
   /** Titles of tips already shown in this conversation, so the examiner never repeats one. */
   tipsSeen: z.array(z.string().min(1).max(80)).max(20).optional(),
+  /** Corrections already made in this conversation (oldest first), for consistency and repeats. */
+  ledger: z
+    .array(z.strictObject({ wrong: z.string().min(1).max(200), right: z.string().min(1).max(200) }))
+    .max(20)
+    .optional(),
 });
 export type CoachBody = z.infer<typeof CoachBodySchema>;
 

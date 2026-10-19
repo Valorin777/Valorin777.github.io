@@ -74,6 +74,8 @@ export interface CoachInput {
   level: "B1" | "B2";
   /** Titles of tips already shown, so the coach never repeats one. */
   tipsSeen?: string[];
+  /** Corrections already made (oldest first), so the coach stays consistent and notices repeats. */
+  ledger?: { wrong: string; right: string }[];
 }
 
 /** Must match the worker's Zod caps (worker/src/schemas.ts); longer input is cut, not rejected. */
@@ -169,6 +171,9 @@ export function clampCoachInput(input: CoachInput): CoachInput {
     focus,
     level: input.level,
     ...(tipsSeen.length ? { tipsSeen } : {}),
+    ...(input.ledger && input.ledger.length
+      ? { ledger: input.ledger.slice(-20).map((l) => ({ wrong: cut(l.wrong.trim(), 200), right: cut(l.right.trim(), 200) })).filter((l) => l.wrong && l.right) }
+      : {}),
   };
 }
 

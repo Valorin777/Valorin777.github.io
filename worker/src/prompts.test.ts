@@ -138,3 +138,12 @@ describe("oneLine", () => {
     expect(oneLine(" a\n\tb\r\n\u0000c ")).toBe("a b c");
   });
 });
+
+describe("coach rulings ledger", () => {
+  it("shows earlier corrections to both minds", () => {
+    const ledger = [{ wrong: "i was went", right: "I went" }];
+    expect(coachSystemPrompt({ ...coach, ended: false, ledger })).toContain("Rulings already made in this conversation (oldest first): i was went → I went.");
+    expect(coachAnalysisPrompt({ ...coach, ended: false, ledger })).toContain("i was went → I went");
+    expect(coachSystemPrompt({ ...coach, ended: false })).not.toContain("Rulings already made");
+  });
+});
