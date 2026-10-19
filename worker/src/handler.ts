@@ -12,7 +12,7 @@ import { DEFAULT_COACH_MODEL, type Deps, type Env, type RateLimiter } from "./en
 import { ANSWER_TTL_SECONDS, FALLBACK_ANSWER_TTL_SECONDS, kvPut } from "./kv";
 import { completeWithFallback, primaryModel } from "./llm";
 import { UpstreamError } from "./openrouter";
-import { cleanText, correctionFits, parseCoachOutput, parseCoachAnalysis } from "./parse";
+import { cleanText, correctionFits, parseCoachOutput, parseCoachAnalysis, escalate, fixBeRule } from "./parse";
 import { buildCoachMessages, buildExplainMessages, buildTranslateMessages, buildCoachAnalysisMessages } from "./prompts";
 import {
   CoachBodySchema,
@@ -194,8 +194,8 @@ async function handleCoach(input: CoachBody, env: Env, deps: Deps, cors: HeaderM
   const analysis = review.status === "fulfilled" ? review.value.value : { correction: null, tip: null };
   const lastUserText = input.history[input.history.length - 1]?.text ?? "";
   const correction =
-    analysis.correction && correctionFits(analysis.correction, lastUserText) ? analysis.correction : null;
-  const body: CoachResponse = { reply: answer.value.reply, correction, tip: analysis.tip, ended };
+    analysis.correction && correctionFits(analysis.correction, lastUserText) ? escalate(analysis.correction, input.ledger) : null;
+  const body: CoachResponse = { reply: fixBeRule(answer.value.reply), correction, tip: analysis.tip, ended };
   return jsonResponse(200, body, { ...cors, "X-AI-Model": answer.model });
 }
 

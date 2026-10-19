@@ -55,7 +55,7 @@ export const CoachBodySchema = z.strictObject({
   tipsSeen: z.array(z.string().min(1).max(80)).max(20).optional(),
   /** Corrections already made in this conversation (oldest first), for consistency and repeats. */
   ledger: z
-    .array(z.strictObject({ wrong: z.string().min(1).max(200), right: z.string().min(1).max(200) }))
+    .array(z.strictObject({ wrong: z.string().min(1).max(200), right: z.string().min(1).max(200), type: z.string().max(40).optional() }))
     .max(20)
     .optional(),
 });
@@ -65,12 +65,35 @@ export type CoachBody = z.infer<typeof CoachBodySchema>;
 export const DeviceIdSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9-]{7,63}$/);
 
 /** A correction as the model returns it; anything that does not fit is dropped, not repaired. */
+/** Error families the examiner labels, so repeats can be counted. */
+export const ERROR_TYPES = [
+  "extra-be",
+  "state-verb-ing",
+  "pp-finished-time",
+  "since-for",
+  "if-will",
+  "missing-past-perfect",
+  "tense-switch",
+  "will-would",
+  "was-were",
+  "there-was",
+  "third-conditional",
+  "question-form",
+  "other",
+] as const;
+
 export const CorrectionSchema = z.object({
   wrong: z.string().trim().min(1).max(200),
   right: z.string().trim().min(1).max(200),
   why: z.string().trim().min(1).max(240),
+  type: z.string().trim().max(40).optional(),
 });
-export type Correction = z.infer<typeof CorrectionSchema>;
+export interface Correction {
+  wrong: string;
+  right: string;
+  why: string;
+  type?: string;
+}
 
 export const ReplyTextSchema = z.string().trim().min(1).max(2000);
 
@@ -100,7 +123,7 @@ export const ExplainResponseSchema = z.strictObject({
 export const CoachResponseSchema = z.strictObject({
   reply: z.string().min(1),
   correction: z
-    .strictObject({ wrong: z.string(), right: z.string(), why: z.string() })
+    .strictObject({ wrong: z.string(), right: z.string(), why: z.string(), type: z.string().optional() })
     .nullable(),
   tip: z
     .strictObject({ title: z.string(), text: z.string(), ru: z.string().optional(), examples: z.array(z.string()).optional() })

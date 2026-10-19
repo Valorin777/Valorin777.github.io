@@ -135,7 +135,29 @@ function cleanCorrection(value: unknown): Correction | null {
   const wrong = cleanText(parsed.data.wrong, { maxWords: 40, bold: false });
   const right = cleanText(parsed.data.right, { maxWords: 40, bold: false });
   if (!why || !wrong || !right) return null;
-  return { wrong, right, why };
+  const type = normalizeErrorType(parsed.data.type);
+  return { wrong, right, why, ...(type ? { type } : {}) };
+}
+
+export function normalizeErrorType(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const t = value.trim().toLowerCase().replace(/[^a-z-]+/g, "-").replace(/^-+|-+$/g, "");
+  return t ? t.slice(0, 40) : undefined;
+}
+
+const ORDINAL = ["", "1st", "2nd", "3rd"];
+
+/**
+ * Repeats are counted in code, not left to the model: from the second mistake of the same
+ * family the why starts with "Again (Nth time):", every time.
+ */
+export function escalate(correction: Correction, ledger: ReadonlyArray<{ type?: string }> | undefined): Correction {
+  if (!correction.type || correction.type === "other") return correction;
+  const before = (ledger ?? []).filter((l) => l.type === correction.type).length;
+  if (before === 0) return correction;
+  const n = before + 1;
+  const why = correction.why.replace(/^again[^:]*:\s*/i, "");
+  return { ...correction, why: `Again (${ORDINAL[n] ?? `${n}th`} time): ${why.charAt(0).toLowerCase()}${why.slice(1)}` };
 }
 
 /**

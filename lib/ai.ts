@@ -50,6 +50,8 @@ export interface CoachCorrection {
   wrong: string;
   right: string;
   why: string;
+  /** Error family (extra-be, pp-finished-time, …), used to count repeats. */
+  type?: string;
 }
 
 /** A short tense trick the coach adds to a turn (shown as a card, not read aloud). */
@@ -75,7 +77,7 @@ export interface CoachInput {
   /** Titles of tips already shown, so the coach never repeats one. */
   tipsSeen?: string[];
   /** Corrections already made (oldest first), so the coach stays consistent and notices repeats. */
-  ledger?: { wrong: string; right: string }[];
+  ledger?: { wrong: string; right: string; type?: string }[];
 }
 
 /** Must match the worker's Zod caps (worker/src/schemas.ts); longer input is cut, not rejected. */
@@ -172,7 +174,12 @@ export function clampCoachInput(input: CoachInput): CoachInput {
     level: input.level,
     ...(tipsSeen.length ? { tipsSeen } : {}),
     ...(input.ledger && input.ledger.length
-      ? { ledger: input.ledger.slice(-20).map((l) => ({ wrong: cut(l.wrong.trim(), 200), right: cut(l.right.trim(), 200) })).filter((l) => l.wrong && l.right) }
+      ? {
+          ledger: input.ledger
+            .slice(-20)
+            .map((l) => ({ wrong: cut(l.wrong.trim(), 200), right: cut(l.right.trim(), 200), ...(l.type ? { type: cut(l.type, 40) } : {}) }))
+            .filter((l) => l.wrong && l.right),
+        }
       : {}),
   };
 }
@@ -193,7 +200,7 @@ export function parseCoachResponse(data: unknown): CoachReply | null {
   let correction: CoachCorrection | null = null;
   const c = data.correction;
   if (isRecord(c) && typeof c.wrong === "string" && typeof c.right === "string" && typeof c.why === "string") {
-    correction = { wrong: c.wrong, right: c.right, why: c.why };
+    correction = { wrong: c.wrong, right: c.right, why: c.why, ...(typeof c.type === "string" && c.type ? { type: c.type } : {}) };
   }
   let tip: CoachTip | null = null;
   const t = data.tip;

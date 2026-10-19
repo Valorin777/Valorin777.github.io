@@ -9,6 +9,8 @@ import {
   fixBeRule,
   pairExamples,
   parseCoachAnalysis,
+  escalate,
+  normalizeErrorType,
 } from "./parse";
 
 describe("stripCodeFences", () => {
@@ -178,5 +180,20 @@ describe("tip safety", () => {
   it("parses the examiner's JSON", () => {
     expect(parseCoachAnalysis('{"correction":null,"tip":{"title":"T","text":"X."}}')).toEqual({ correction: null, tip: { title: "T", text: "X." } });
     expect(parseCoachAnalysis("no json here")).toBeNull();
+  });
+});
+
+describe("repeat escalation", () => {
+  const c = { wrong: "i am agree", right: "I agree", why: "Don't put am right before a normal verb.", type: "extra-be" };
+  it("leaves a first mistake alone and counts repeats in code", () => {
+    expect(escalate(c, [])).toEqual(c);
+    expect(escalate(c, [{ type: "extra-be" }]).why).toBe("Again (2nd time): don't put am right before a normal verb.");
+    expect(escalate(c, [{ type: "extra-be" }, { type: "if-will" }, { type: "extra-be" }]).why).toMatch(/^Again \(3rd time\): /);
+    expect(escalate({ ...c, why: "Again a be-error: no am." }, [{ type: "extra-be" }]).why).toBe("Again (2nd time): no am.");
+    expect(escalate({ ...c, type: "other" }, [{ type: "other" }])).toEqual({ ...c, type: "other" });
+  });
+  it("normalises the error family label", () => {
+    expect(normalizeErrorType(" Extra Be ")).toBe("extra-be");
+    expect(normalizeErrorType(5)).toBeUndefined();
   });
 });

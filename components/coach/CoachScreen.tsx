@@ -21,7 +21,7 @@ import { actions, useHydrated } from "@/lib/store";
 
 interface Turn extends CoachTurn {
   id: string;
-  correction?: { wrong: string; right: string; why: string } | null;
+  correction?: { wrong: string; right: string; why: string; type?: string } | null;
   tip?: CoachTip | null;
 }
 
@@ -135,7 +135,9 @@ function CoachBody() {
           focus: scenario.focus,
           level: "B1",
           tipsSeen: history.flatMap((t) => (t.tip ? [t.tip.title] : [])),
-          ledger: history.flatMap((t) => (t.correction ? [{ wrong: t.correction.wrong, right: t.correction.right }] : [])),
+          ledger: history.flatMap((t) =>
+            t.correction ? [{ wrong: t.correction.wrong, right: t.correction.right, ...(t.correction.type ? { type: t.correction.type } : {}) }] : [],
+          ),
         },
         ctrl.signal,
       );
