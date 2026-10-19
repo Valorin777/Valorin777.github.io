@@ -72,27 +72,31 @@ describe("coach prompts", () => {
     const prompt = coachSystemPrompt({ ...coach, ended: false });
     expect(prompt).toContain('"Coach"');
     expect(prompt).toContain("Scenario: Weekend small talk");
-    expect(prompt).toContain("1–3 short sentences, at most 45 words");
-    expect(prompt).toContain("ONE simple follow-up question");
+    expect(prompt).toContain("2–4 short, natural sentences, at most 60 words");
+    expect(prompt).toContain("exactly ONE follow-up question");
     expect(prompt).toContain("LAST message");
-    expect(prompt).toContain("exactly one correction");
+    expect(prompt).toContain("the single most important mistake");
+    expect(prompt).toContain("TENSE TIP");
+    expect(prompt).toContain("Never was/were + V1 or V2");
     expect(prompt).toContain('"be" goes only with -ing (continuous) or V3 (passive)');
     expect(prompt).toContain("gerund vs infinitive");
     expect(prompt).toContain("third conditional");
     expect(prompt).toContain("translation from Russian");
     expect(prompt).toContain("countable vs uncountable");
     expect(prompt).toContain("Today's focus: extra be; past simple.");
-    expect(prompt).toContain('{"reply": string, "correction": {"wrong": string, "right": string, "why": string} | null}');
-    expect(prompt).toContain("at most 15 words");
+    expect(prompt).toContain('"tip": {"title": string, "text": string, "ru": string, "examples": string[]} | null}');
+    expect(prompt).toContain("at most 20 words");
     expect(prompt).toContain("B1 level");
-    expect(prompt.length).toBeLessThan(3500);
+    expect(prompt).toContain("Been vs gone");
+    expect(prompt).toContain("ANSWER IT IN THE REPLY");
+    expect(prompt.length).toBeLessThan(12000);
   });
 
   it("wraps up without a question on the last turn", () => {
     const prompt = coachSystemPrompt({ ...coach, ended: true });
     expect(prompt).toContain("LAST turn of the session");
-    expect(prompt).toContain("session is complete");
-    expect(prompt).not.toContain("ONE simple follow-up question");
+    expect(prompt).toContain("wrap up");
+    expect(prompt).not.toContain("ending with exactly ONE follow-up question");
   });
 
   it("omits the focus line when there is no focus", () => {

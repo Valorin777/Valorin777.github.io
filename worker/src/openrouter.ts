@@ -34,6 +34,7 @@ export interface ModelQuirks {
   temperature: boolean;
   /** true: send reasoning {effort:"none"} so thinking cannot eat the small max_tokens budget. */
   disableReasoning: boolean;
+  lowReasoning: boolean;
 }
 
 /**
@@ -46,6 +47,8 @@ export function modelQuirks(model: string): ModelQuirks {
   return {
     temperature: !fixedSampling,
     disableReasoning: /^anthropic\/claude-haiku-5/.test(id),
+    // Sonnet 5.x refuses "none" but keeps thinking short (about 2 s) at "low".
+    lowReasoning: /^anthropic\/claude-sonnet-5/.test(id),
   };
 }
 
@@ -58,6 +61,7 @@ export function buildCompletionBody(model: string, request: CompletionRequest): 
   };
   if (quirks.temperature) body.temperature = request.temperature;
   if (quirks.disableReasoning) body.reasoning = { effort: "none" };
+  else if (quirks.lowReasoning) body.reasoning = { effort: "low" };
   if (request.json) body.response_format = { type: "json_object" };
   return body;
 }

@@ -15,7 +15,8 @@ import {
   recordedUrl,
   prefetchSpeech,
   speakNeural,
-  speechChunks,
+  sentenceChunks,
+  fetchSpeech,
   stopNeural,
   type NeuralFailure,
 } from "@/lib/tts";
@@ -374,20 +375,25 @@ export function speak(text: string, opts: SpeakOptions = {}): () => void {
   const voice = opts.neuralVoice;
   const isRecorded = Boolean(voice && recordedUrl(plainText(text), voice));
   if (voice && (isRecorded || (neuralAvailable() && Date.now() >= neuralPausedUntil))) {
-    const chunks = isRecorded ? [plainText(text)] : speechChunks(plainText(text));
+    const chunks = isRecorded ? [plainText(text)] : sentenceChunks(plainText(text));
+    // Voice every sentence at once; each one plays as soon as the one before it ends.
+    if (!isRecorded) for (const c of chunks.slice(1)) void fetchSpeech(c, voice).catch(() => undefined);
     if (chunks.length) return speakNatural(chunks, voice, opts);
   }
   return speakDevice(text, opts);
 }
 
-/** If the natural voice has not started by then, the device voice reads the text instead. */
-const NEURAL_START_TIMEOUT_MS = 6000;
+/**
+ * A natural voice is worth waiting for: the device voice only takes over when the natural one
+ * really fails, or after this long without a sound.
+ */
+const NEURAL_START_TIMEOUT_MS = 20_000;
 /** After a slow or refused natural voice, use the device voice for a while. */
 const NEURAL_PAUSE_MS = 60_000;
 let neuralPausedUntil = 0;
 
 function pauseNeural(reason: NeuralFailure | "slow"): void {
-  const transient: ReadonlyArray<NeuralFailure | "slow"> = ["slow", "rate-limit", "timeout", "unavailable"];
+  const transient: ReadonlyArray<NeuralFailure | "slow"> = ["rate-limit", "unavailable"];
   if (transient.includes(reason)) neuralPausedUntil = Date.now() + NEURAL_PAUSE_MS;
 }
 
@@ -475,7 +481,6 @@ function speakNatural(chunks: string[], voice: string, opts: SpeakOptions): () =
   startTimer = setTimeout(() => {
     startTimer = null;
     if (done || started) return;
-    pauseNeural("slow");
     handOff();
   }, NEURAL_START_TIMEOUT_MS);
   playNext();

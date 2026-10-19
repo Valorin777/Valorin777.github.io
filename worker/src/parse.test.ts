@@ -45,30 +45,32 @@ describe("parseCoachOutput", () => {
     expect(out).toEqual({
       reply: "Sounds lovely! Who did you go with?",
       correction: { wrong: "I am went", right: "I went", why: "Past simple has no 'be'." },
+      tip: null,
     });
   });
 
   it("handles fenced JSON and a null correction", () => {
     const out = parseCoachOutput('```json\n{"reply":"Great. What next?","correction":null}\n```');
-    expect(out).toEqual({ reply: "Great. What next?", correction: null });
+    expect(out).toEqual({ reply: "Great. What next?", correction: null, tip: null });
   });
 
   it("drops a malformed correction but keeps the reply", () => {
     const out = parseCoachOutput('{"reply":"Nice! Why?","correction":{"wrong":"","right":"x","why":"y"}}');
-    expect(out).toEqual({ reply: "Nice! Why?", correction: null });
+    expect(out).toEqual({ reply: "Nice! Why?", correction: null, tip: null });
     const noWhy = parseCoachOutput('{"reply":"Nice! Why?","correction":{"wrong":"a","right":"b"}}');
     expect(noWhy?.correction).toBeNull();
   });
 
   it("salvages the reply from JSON cut off by max_tokens", () => {
     const out = parseCoachOutput('{"reply": "Cool \\"park\\" day! What did you eat?", "correction": {"wrong": "I am');
-    expect(out).toEqual({ reply: 'Cool "park" day! What did you eat?', correction: null });
+    expect(out).toEqual({ reply: 'Cool "park" day! What did you eat?', correction: null, tip: null });
   });
 
   it("falls back to plain text with no correction", () => {
     expect(parseCoachOutput("That sounds fun! What was the best part?")).toEqual({
       reply: "That sounds fun! What was the best part?",
       correction: null,
+      tip: null,
     });
   });
 
@@ -135,5 +137,28 @@ describe("correctionFits", () => {
 
   it("tolerates small reordering when every word was said", () => {
     expect(correctionFits({ wrong: "am went I", right: "I went", why: "x" }, said)).toBe(true);
+  });
+});
+
+describe("coach tips", () => {
+  it("reads a tense tip and drops a malformed one", () => {
+    const out = parseCoachOutput(
+      JSON.stringify({
+        reply: "Oh, the mountains! What were you doing when the storm started?",
+        correction: null,
+        tip: { title: "Was + -ing", text: "Use **was + -ing** for an action in progress.", ru: "Was + -ing — действие в процессе.", examples: ["✓ I was walking", "✗ I was walked home"] },
+      }),
+    );
+    expect(out?.tip).toEqual({
+      title: "Was + -ing",
+      text: "Use **was + -ing** for an action in progress.",
+      ru: "Was + -ing — действие в процессе.",
+      examples: ["✓ I was walking", "✗ I was walked home"],
+    });
+    expect(parseCoachOutput(JSON.stringify({ reply: "Hi! Why?", tip: { title: "" } }))?.tip).toBeNull();
+    const many = parseCoachOutput(JSON.stringify({ reply: "Hi! Why?", tip: { title: "T", text: "X.", examples: ["a", "b", "c", "d", "e"] } }));
+    expect(many?.tip?.examples).toEqual(["a", "b", "c"]);
+    const one = parseCoachOutput(JSON.stringify({ reply: "Hi! Why?", tip: { title: "T", text: "X.", ru: null, examples: "✓ I went" } }));
+    expect(one?.tip).toEqual({ title: "T", text: "X.", examples: ["✓ I went"] });
   });
 });

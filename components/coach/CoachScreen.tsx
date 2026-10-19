@@ -9,57 +9,20 @@ import { Button, LinkButton } from "@/components/ui/Button";
 import { ArrowLeftIcon, ArrowRightIcon } from "@/components/ui/Icons";
 import { Kbd, KeyHints } from "@/components/ui/Kbd";
 import { InlineTranslate } from "@/components/translate/InlineTranslate";
+import { TipCard } from "./TipCard";
 import { RichText } from "@/components/ui/RichText";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useHotkeys } from "@/hooks/useHotkeys";
 import { useRecognizer } from "@/hooks/useSpeech";
-import { aiEnabled, AiError, coach, type CoachTurn } from "@/lib/ai";
+import { aiEnabled, AiError, coach, type CoachTip, type CoachTurn } from "@/lib/ai";
+import { SCENARIOS, type Scenario } from "@/lib/coachScenarios";
 import type { Category } from "@/lib/content/schema";
 import { actions, useHydrated } from "@/lib/store";
-
-interface Scenario {
-  id: string;
-  label: string;
-  opener: string;
-  focus: string[];
-}
-
-const SCENARIOS: Scenario[] = [
-  {
-    id: "week",
-    label: "Your week",
-    opener: "Hi! Let's talk about your week. What have you done so far this week?",
-    focus: ["present perfect vs past simple", "be only with -ing or V3"],
-  },
-  {
-    id: "work",
-    label: "Work and study",
-    opener: "Tell me about your work or studies. What are you working on these days?",
-    focus: ["present simple vs continuous", "collocations"],
-  },
-  {
-    id: "trip",
-    label: "A trip",
-    opener: "Think of a trip you remember well. Where did you go, and what had you expected before you got there?",
-    focus: ["past simple", "past perfect"],
-  },
-  {
-    id: "opinions",
-    label: "Opinions",
-    opener: "Here's a question: is it better to work from home or from an office? What do you think, and why?",
-    focus: ["I agree / it depends (no be)", "linking words"],
-  },
-  {
-    id: "free",
-    label: "Free talk",
-    opener: "Hi! What would you like to talk about today?",
-    focus: ["be only with -ing or V3", "verb patterns", "collocations"],
-  },
-];
 
 interface Turn extends CoachTurn {
   id: string;
   correction?: { wrong: string; right: string; why: string } | null;
+  tip?: CoachTip | null;
 }
 
 /** Rough category for the error log, from what the correction changed. */
@@ -150,7 +113,7 @@ function CoachBody() {
     try {
       const res = await coach(
         {
-          history: nextTurns.map(({ role, text: t }) => ({ role, text: t })).slice(-16),
+          history: nextTurns.map(({ role, text: t }) => ({ role, text: t })).slice(-30),
           scenario: scenario.label,
           focus: scenario.focus,
           level: "B1",
@@ -170,7 +133,7 @@ function CoachBody() {
           rule: c.why,
         });
       }
-      const reply: Turn = { id: `a${nextTurns.length}`, role: "assistant", text: res.reply };
+      const reply: Turn = { id: `a${nextTurns.length}`, role: "assistant", text: res.reply, tip: res.tip };
       setTurns((t) => [...t.map((x) => (x.id === userTurn.id ? { ...x, correction: res.correction } : x)), reply]);
       setEnded(res.ended);
       speak(res.reply, reply.id);
@@ -308,14 +271,21 @@ function CoachBody() {
               className={t.role === "user" ? "justify-self-end" : "justify-self-start"}
             >
               {t.role === "assistant" ? (
-                <div className="flex max-w-[34rem] items-start gap-1">
-                  <div className="rounded-lg rounded-tl-sm border border-line bg-surface px-4 py-3 shadow-1">
-                    <p className="text-lesson text-text">
-                      <RichText text={t.text} />
-                    </p>
-                    <InlineTranslate text={t.text} />
+                <div className="max-w-[34rem]">
+                  <div className="flex items-start gap-1">
+                    <div className="rounded-lg rounded-tl-sm border border-line bg-surface px-4 py-3 shadow-1">
+                      <p className="text-lesson text-text">
+                        <RichText text={t.text} />
+                      </p>
+                      <InlineTranslate text={t.text} />
+                    </div>
+                    <PlayButton text={t.text} id={t.id} className="mt-1" />
                   </div>
-                  <PlayButton text={t.text} id={t.id} className="mt-1" />
+                  {t.tip && (
+                    <div className="mr-12">
+                      <TipCard tip={t.tip} />
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="grid max-w-[30rem] justify-items-end gap-2">

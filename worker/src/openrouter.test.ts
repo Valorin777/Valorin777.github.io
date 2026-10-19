@@ -34,7 +34,7 @@ async function failure(promise: Promise<unknown>): Promise<UpstreamError> {
 
 describe("modelQuirks", () => {
   it("drops temperature and thinking for Claude Haiku 5.5", () => {
-    expect(modelQuirks("anthropic/claude-haiku-5.5")).toEqual({ temperature: false, disableReasoning: true });
+    expect(modelQuirks("anthropic/claude-haiku-5.5")).toEqual({ temperature: false, disableReasoning: true, lowReasoning: false });
   });
 
   it("drops temperature for the other fixed-sampling Claude models", () => {
@@ -44,7 +44,7 @@ describe("modelQuirks", () => {
   });
 
   it("keeps temperature for older or non-Anthropic models", () => {
-    expect(modelQuirks("anthropic/claude-haiku-4.5")).toEqual({ temperature: true, disableReasoning: false });
+    expect(modelQuirks("anthropic/claude-haiku-4.5")).toEqual({ temperature: true, disableReasoning: false, lowReasoning: false });
     expect(modelQuirks("anthropic/claude-sonnet-4.6").temperature).toBe(true);
     expect(modelQuirks("openai/gpt-x-mini").temperature).toBe(true);
   });

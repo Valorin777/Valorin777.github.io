@@ -8,7 +8,7 @@ import {
   writeExplainKv,
 } from "./cache";
 import { corsHeaders, isAllowedOrigin, parseAllowedOrigins, preflightHeaders, withExposedHeaders } from "./cors";
-import type { Deps, Env, RateLimiter } from "./env";
+import { DEFAULT_COACH_MODEL, type Deps, type Env, type RateLimiter } from "./env";
 import { ANSWER_TTL_SECONDS, FALLBACK_ANSWER_TTL_SECONDS, kvPut } from "./kv";
 import { completeWithFallback, primaryModel } from "./llm";
 import { UpstreamError } from "./openrouter";
@@ -35,7 +35,9 @@ import { synthesize } from "./tts";
 import { DEFAULT_VOICE, VOICES } from "./voices";
 
 export const EXPLAIN_MAX_TOKENS = 140;
-export const COACH_MAX_TOKENS = 220;
+export const COACH_MAX_TOKENS = 900;
+/** Sonnet with a short think plus a tip takes a few seconds; give it room. */
+export const COACH_TIMEOUT_MS = 25_000;
 export const TRANSLATE_MAX_TOKENS = 900;
 export const EXPLAIN_TEMPERATURE = 0.4;
 export const COACH_TEMPERATURE = 0.7;
@@ -167,9 +169,10 @@ async function handleExplain(input: ExplainBody, env: Env, deps: Deps, requestUr
 
 async function handleCoach(input: CoachBody, env: Env, deps: Deps, cors: HeaderMap): Promise<Response> {
   const ended = input.history.length >= LIMITS.historyMax;
+  const coachEnv = { ...env, MODEL: env.COACH_MODEL?.trim() || DEFAULT_COACH_MODEL };
   const answer = await completeWithFallback(
-    env,
-    deps,
+    coachEnv,
+    { ...deps, upstreamTimeoutMs: deps.upstreamTimeoutMs ?? COACH_TIMEOUT_MS },
     {
       messages: buildCoachMessages({ ...input, ended }),
       maxTokens: COACH_MAX_TOKENS,
@@ -183,7 +186,7 @@ async function handleCoach(input: CoachBody, env: Env, deps: Deps, cors: HeaderM
   const lastUserText = input.history[input.history.length - 1]?.text ?? "";
   const correction =
     parsed.correction && correctionFits(parsed.correction, lastUserText) ? parsed.correction : null;
-  const body: CoachResponse = { reply: parsed.reply, correction, ended };
+  const body: CoachResponse = { reply: parsed.reply, correction, tip: parsed.tip, ended };
   return jsonResponse(200, body, { ...cors, "X-AI-Model": answer.model });
 }
 

@@ -216,11 +216,11 @@ describe("guards", () => {
     expect(h.fetchMock).not.toHaveBeenCalled();
   });
 
-  it("caps the body at 8 KB by header and by actual size", async () => {
+  it("caps the body at 16 KB by header and by actual size", async () => {
     const h = harness();
-    const declared = await handleRequest(post("/explain", explainBody, { "Content-Length": "9000" }), h.env, h.deps);
+    const declared = await handleRequest(post("/explain", explainBody, { "Content-Length": "17000" }), h.env, h.deps);
     expect(declared.status).toBe(413);
-    const big = JSON.stringify({ ...explainBody, task: "x".repeat(9000) });
+    const big = JSON.stringify({ ...explainBody, task: "x".repeat(17000) });
     const actual = await handleRequest(post("/explain", big), h.env, h.deps);
     expect(actual.status).toBe(413);
     expect(await actual.json()).toEqual({ error: "too-large" });
@@ -324,10 +324,11 @@ describe("POST /coach", () => {
     expect(await res.json()).toEqual({
       reply: "The park sounds lovely! Who did you go with?",
       correction: { wrong: "i am went", right: "I went", why: "Past simple needs no 'am'." },
+      tip: null,
       ended: false,
     });
     const sent = upstreamBody(h);
-    expect(sent).toMatchObject({ max_tokens: 220, response_format: { type: "json_object" } });
+    expect(sent).toMatchObject({ max_tokens: 900, response_format: { type: "json_object" } });
     const roles = (sent.messages as Array<{ role: string }>).map((m) => m.role);
     expect(roles).toEqual(["system", "user", "assistant", "user"]);
   });
@@ -345,19 +346,21 @@ describe("POST /coach", () => {
     expect(await (await handleRequest(post("/coach", coachBody), fenced.env, fenced.deps)).json()).toEqual({
       reply: "Great! Why?",
       correction: null,
+      tip: null,
       ended: false,
     });
     const plain = harness(() => modelAnswer("That sounds fun! What was the best part?"));
     expect(await (await handleRequest(post("/coach", coachBody), plain.env, plain.deps)).json()).toEqual({
       reply: "That sounds fun! What was the best part?",
       correction: null,
+      tip: null,
       ended: false,
     });
   });
 
-  it("ends the session at 16 turns and tells the model to wrap up", async () => {
+  it("ends the session at 30 turns and tells the model to wrap up", async () => {
     const h = harness(() => modelAnswer('{"reply":"Great talk today, the session is complete!","correction":null}'));
-    const history = Array.from({ length: 16 }, (_, i) => ({
+    const history = Array.from({ length: 30 }, (_, i) => ({
       role: i % 2 === 0 ? "assistant" : "user",
       text: i % 2 === 0 ? "And then?" : "then we played football",
     }));

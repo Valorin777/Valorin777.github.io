@@ -64,6 +64,33 @@ export function truncateAtWord(text: string, max: number = TTS_MAX_CHARS): strin
 }
 
 /** Text → pieces of at most `max` chars, split between sentences where possible. Lossless. */
+/**
+ * Sentence by sentence, so the first one plays within a second or two while the rest are still
+ * being voiced in parallel. Tiny pieces ("Oh nice!") ride along with the next sentence.
+ */
+export function sentenceChunks(text: string, max: number = TTS_MAX_CHARS): string[] {
+  const clean = normalizeSpeechText(text);
+  if (!clean) return [];
+  const sentences = clean
+    .replace(/([.!?…]+["')\]]*) /g, "$1\u0000")
+    .split("\u0000")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const out: string[] = [];
+  let carry = "";
+  for (const s of sentences) {
+    const joined = carry ? `${carry} ${s}` : s;
+    if (joined.length < 24 && s !== sentences[sentences.length - 1]) {
+      carry = joined;
+      continue;
+    }
+    carry = "";
+    out.push(...speechChunks(joined, max));
+  }
+  if (carry) out.push(...speechChunks(carry, max));
+  return out;
+}
+
 export function speechChunks(text: string, max: number = TTS_MAX_CHARS): string[] {
   const clean = normalizeSpeechText(text);
   if (!clean) return [];

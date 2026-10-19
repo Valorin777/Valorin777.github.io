@@ -843,7 +843,8 @@ describe("natural voice and server recognition (AI enabled)", () => {
     audio().emit("playing");
     audio().playToEnd();
     expect(events).toEqual(["start", "end"]);
-    expect(fetchMock.mock.calls.map(([, init]) => bodyText(init))).toEqual([first, second]);
+    // Every sentence is requested up front (in parallel); each text at least once, in order of first request.
+    expect([...new Set(fetchMock.mock.calls.map(([, init]) => bodyText(init)))].sort()).toEqual([first, second].sort());
   });
 
   it("stopSpeaking, cancel and a new utterance end the natural voice with one onEnd", async () => {

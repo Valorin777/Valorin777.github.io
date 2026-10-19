@@ -52,9 +52,18 @@ export interface CoachCorrection {
   why: string;
 }
 
+/** A short tense trick the coach adds to a turn (shown as a card, not read aloud). */
+export interface CoachTip {
+  title: string;
+  text: string;
+  ru?: string;
+  examples?: string[];
+}
+
 export interface CoachReply {
   reply: string;
   correction: CoachCorrection | null;
+  tip: CoachTip | null;
   ended: boolean;
 }
 
@@ -74,7 +83,7 @@ export const AI_LIMITS = {
   rule: 160,
   category: 40,
   turnText: 400,
-  historyMax: 16,
+  historyMax: 30,
   scenario: 60,
   focusItems: 6,
   focusItem: 40,
@@ -169,7 +178,18 @@ export function parseCoachResponse(data: unknown): CoachReply | null {
   if (isRecord(c) && typeof c.wrong === "string" && typeof c.right === "string" && typeof c.why === "string") {
     correction = { wrong: c.wrong, right: c.right, why: c.why };
   }
-  return { reply: data.reply, correction, ended: data.ended === true };
+  let tip: CoachTip | null = null;
+  const t = data.tip;
+  if (isRecord(t) && typeof t.title === "string" && typeof t.text === "string" && t.title.trim() && t.text.trim()) {
+    const examples = Array.isArray(t.examples) ? t.examples.filter((e): e is string => typeof e === "string").slice(0, 3) : [];
+    tip = {
+      title: t.title,
+      text: t.text,
+      ...(typeof t.ru === "string" && t.ru.trim() ? { ru: t.ru } : {}),
+      ...(examples.length ? { examples } : {}),
+    };
+  }
+  return { reply: data.reply, correction, tip, ended: data.ended === true };
 }
 
 // ---------- local explanation cache ----------

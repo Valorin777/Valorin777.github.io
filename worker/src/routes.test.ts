@@ -348,6 +348,7 @@ describe("LLM fallback on /explain and /coach", () => {
     expect(await res.json()).toEqual({
       reply: "Oh, nice! Who did you go with?",
       correction: { wrong: "i am went", right: "I went", why: "Past simple needs no 'am'." },
+      tip: null,
       ended: false,
     });
     expect(res.headers.get("X-AI-Model")).toBe(WORKERS_AI_LLM);

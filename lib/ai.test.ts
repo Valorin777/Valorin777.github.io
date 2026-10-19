@@ -225,10 +225,10 @@ describe("clamping to the worker's limits", () => {
     expect(out.right).toBe("started");
   });
 
-  it("keeps the last 16 non-empty turns and trims focus", () => {
-    const history = Array.from({ length: 20 }, (_, i) => ({
+  it("keeps the last 30 non-empty turns and trims focus", () => {
+    const history = Array.from({ length: 34 }, (_, i) => ({
       role: i % 2 === 0 ? ("assistant" as const) : ("user" as const),
-      text: i === 5 ? "   " : `turn ${i} ${"z".repeat(i === 19 ? 500 : 0)}`,
+      text: i === 5 ? "   " : `turn ${i} ${"z".repeat(i === 33 ? 500 : 0)}`,
     }));
     const out = clampCoachInput({
       history,
@@ -236,8 +236,8 @@ describe("clamping to the worker's limits", () => {
       focus: ["a", " ", "b".repeat(50), "c", "d", "e", "f", "g"],
       level: "B2",
     });
-    expect(out.history).toHaveLength(16);
-    expect(out.history[15]?.text).toHaveLength(AI_LIMITS.turnText);
+    expect(out.history).toHaveLength(30);
+    expect(out.history[29]?.text).toHaveLength(AI_LIMITS.turnText);
     expect(out.history[0]?.text).toBe("turn 3");
     expect(out.scenario).toHaveLength(AI_LIMITS.scenario);
     expect(out.focus).toEqual(["a", "b".repeat(40), "c", "d", "e", "f"]);
@@ -252,7 +252,15 @@ describe("response parsing", () => {
     });
     expect(
       parseCoachResponse({ reply: "Nice! Why?", correction: { wrong: "a", right: "b", why: "c" }, ended: false }),
-    ).toEqual({ reply: "Nice! Why?", correction: { wrong: "a", right: "b", why: "c" }, ended: false });
+    ).toEqual({ reply: "Nice! Why?", correction: { wrong: "a", right: "b", why: "c" }, tip: null, ended: false });
+    expect(
+      parseCoachResponse({
+        reply: "Oh! Why?",
+        correction: null,
+        tip: { title: "Was + -ing", text: "In progress.", ru: "В процессе.", examples: ["✓ a", "✗ b", "✓ c", "✓ d"] },
+        ended: false,
+      })?.tip,
+    ).toEqual({ title: "Was + -ing", text: "In progress.", ru: "В процессе.", examples: ["✓ a", "✗ b", "✓ c"] });
   });
 
   it("rejects junk and drops a malformed correction", () => {
@@ -262,6 +270,7 @@ describe("response parsing", () => {
     expect(parseCoachResponse({ reply: "Hi", correction: { wrong: 1 } })).toEqual({
       reply: "Hi",
       correction: null,
+      tip: null,
       ended: false,
     });
   });

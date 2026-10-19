@@ -10,11 +10,11 @@ export const LIMITS = {
   rule: 160,
   category: 40,
   turnText: 400,
-  historyMax: 16,
+  historyMax: 30,
   scenario: 60,
   focusItems: 6,
   focusItem: 40,
-  bodyBytes: 8 * 1024,
+  bodyBytes: 16 * 1024,
   ttsText: 300,
   translateText: 600,
   noteItems: 3,
@@ -67,6 +67,24 @@ export type Correction = z.infer<typeof CorrectionSchema>;
 
 export const ReplyTextSchema = z.string().trim().min(1).max(2000);
 
+/** A short "tense trick" the coach adds to every turn (shown as a card, not read aloud). */
+export const TipSchema = z.object({
+  title: z.string().trim().min(1).max(80),
+  text: z.string().trim().min(1).max(600),
+  ru: z.string().trim().max(600).nullish().transform((v) => v ?? undefined),
+  // Models sometimes give more examples or a single string: keep the first three.
+  examples: z
+    .union([z.array(z.string()), z.string()])
+    .transform((v) => (Array.isArray(v) ? v : [v]).map((x) => x.trim()).filter((x) => x.length > 0 && x.length <= 200).slice(0, 3))
+    .optional(),
+});
+export interface Tip {
+  title: string;
+  text: string;
+  ru?: string;
+  examples?: string[];
+}
+
 export const ExplainResponseSchema = z.strictObject({
   text: z.string().min(1),
   cached: z.boolean(),
@@ -76,6 +94,9 @@ export const CoachResponseSchema = z.strictObject({
   reply: z.string().min(1),
   correction: z
     .strictObject({ wrong: z.string(), right: z.string(), why: z.string() })
+    .nullable(),
+  tip: z
+    .strictObject({ title: z.string(), text: z.string(), ru: z.string().optional(), examples: z.array(z.string()).optional() })
     .nullable(),
   ended: z.boolean(),
 });

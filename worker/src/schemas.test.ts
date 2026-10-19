@@ -57,11 +57,11 @@ describe("CoachBodySchema", () => {
     expect(CoachBodySchema.safeParse({ ...coach, focus: [] }).success).toBe(true);
   });
 
-  it("needs 1..16 turns and the last one from the learner", () => {
+  it("needs 1..30 turns and the last one from the learner", () => {
     expect(CoachBodySchema.safeParse({ ...coach, history: [] }).success).toBe(false);
     const turn = { role: "user", text: "hello" };
-    expect(CoachBodySchema.safeParse({ ...coach, history: Array(16).fill(turn) }).success).toBe(true);
-    expect(CoachBodySchema.safeParse({ ...coach, history: Array(17).fill(turn) }).success).toBe(false);
+    expect(CoachBodySchema.safeParse({ ...coach, history: Array(30).fill(turn) }).success).toBe(true);
+    expect(CoachBodySchema.safeParse({ ...coach, history: Array(31).fill(turn) }).success).toBe(false);
     const lastAssistant = [...coach.history, { role: "assistant", text: "Nice!" }];
     expect(CoachBodySchema.safeParse({ ...coach, history: lastAssistant }).success).toBe(false);
   });

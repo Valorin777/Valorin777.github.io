@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DAYS, getFinal } from "../content/index";
 import { audioKey, audioText } from "../lib/audioKey";
+import { SCENARIOS } from "../lib/coachScenarios";
 import { finalSpokenTexts, spokenTexts } from "../lib/sentences";
 
 const ROOT = join(__dirname, "..");
@@ -132,6 +133,7 @@ async function main() {
   for (const d of DAYS) if (!ONLY || ONLY.has(d.number)) spokenTexts(d).forEach((t) => texts.add(t));
   const final = getFinal();
   if (final && (!ONLY || ONLY.has(7))) finalSpokenTexts(final).forEach((t) => texts.add(t));
+  if (!ONLY) SCENARIOS.forEach((s) => texts.add(audioText(s.opener)));
 
   mkdirSync(AUDIO, { recursive: true });
   const todo = [...texts].filter((t) => !existsSync(join(AUDIO, `${audioKey(t, VOICE_ID)}.m4a`)));
@@ -161,7 +163,7 @@ async function main() {
 
   // The manifest lists every recorded line for this voice, including earlier runs.
   const have = new Set(readdirSync(AUDIO).filter((f) => f.endsWith(".m4a")).map((f) => f.slice(0, -4)));
-  const keys = [...new Set([...DAYS.flatMap(spokenTexts), ...(final ? finalSpokenTexts(final) : [])])]
+  const keys = [...new Set([...DAYS.flatMap(spokenTexts), ...(final ? finalSpokenTexts(final) : []), ...SCENARIOS.map((s) => audioText(s.opener))])]
     .map((t) => audioKey(t, VOICE_ID))
     .filter((k) => have.has(k))
     .sort();

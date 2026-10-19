@@ -1,4 +1,4 @@
-import { CorrectionSchema, ReplyTextSchema, type Correction } from "./schemas";
+import { CorrectionSchema, ReplyTextSchema, TipSchema, type Correction, type Tip } from "./schemas";
 
 /** Removes one surrounding ``` fence (with or without a language tag). */
 export function stripCodeFences(text: string): string {
@@ -84,6 +84,21 @@ export function cleanText(raw: string, options: CleanOptions): string {
 export interface CoachOutput {
   reply: string;
   correction: Correction | null;
+  tip: Tip | null;
+}
+
+function cleanTip(value: unknown): Tip | null {
+  const parsed = TipSchema.safeParse(value);
+  if (!parsed.success) return null;
+  const title = cleanText(parsed.data.title, { maxWords: 10, bold: false });
+  const text = cleanText(parsed.data.text, { maxWords: 70, bold: true });
+  if (!title || !text) return null;
+  const ru = parsed.data.ru ? cleanText(parsed.data.ru, { maxWords: 70, bold: true }) : "";
+  const examples = (parsed.data.examples ?? [])
+    .map((e) => cleanText(e, { maxWords: 25, bold: true }))
+    .filter((e): e is string => Boolean(e))
+    .slice(0, 3);
+  return { title, text, ...(ru ? { ru } : {}), ...(examples.length ? { examples } : {}) };
 }
 
 const REPLY_MAX_WORDS = 80;
@@ -112,15 +127,15 @@ export function parseCoachOutput(raw: string): CoachOutput | null {
     const reply = ReplyTextSchema.safeParse(json.reply);
     if (!reply.success) return null;
     const cleaned = cleanText(reply.data, { maxWords: REPLY_MAX_WORDS, bold: false });
-    return cleaned ? { reply: cleaned, correction: cleanCorrection(json.correction) } : null;
+    return cleaned ? { reply: cleaned, correction: cleanCorrection(json.correction), tip: cleanTip(json.tip) } : null;
   }
   if (text.startsWith("{")) {
     const salvaged = salvageReply(text);
     const cleaned = salvaged ? cleanText(salvaged, { maxWords: REPLY_MAX_WORDS, bold: false }) : "";
-    return cleaned ? { reply: cleaned, correction: null } : null;
+    return cleaned ? { reply: cleaned, correction: null, tip: null } : null;
   }
   const cleaned = cleanText(text, { maxWords: REPLY_MAX_WORDS, bold: false });
-  return cleaned ? { reply: cleaned, correction: null } : null;
+  return cleaned ? { reply: cleaned, correction: null, tip: null } : null;
 }
 
 /** Lowercase words only, for loose comparison of speech-recognized text. */
