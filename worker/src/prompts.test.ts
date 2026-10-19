@@ -6,6 +6,8 @@ import {
   explainSystemPrompt,
   explainUserPrompt,
   oneLine,
+  buildCoachAnalysisMessages,
+  coachAnalysisPrompt,
 } from "./prompts";
 import type { CoachBody, ExplainBody } from "./schemas";
 
@@ -68,36 +70,50 @@ describe("explain prompts", () => {
 });
 
 describe("coach prompts", () => {
-  it("states the partner rules, weak spots and JSON contract", () => {
+  it("talks like a person, recasts errors by ear and keeps its own English right", () => {
     const prompt = coachSystemPrompt({ ...coach, ended: false });
     expect(prompt).toContain('"Coach"');
     expect(prompt).toContain("Scenario: Weekend small talk");
-    expect(prompt).toContain("2–4 short sentences, at most 50 words");
-    expect(prompt).toContain("ending with exactly ONE question");
-    expect(prompt).toContain("LAST message");
-    expect(prompt).toContain("highest-priority error");
-    expect(prompt).toContain("TENSE TIP");
-    expect(prompt).toContain("Never was/were + V2 as a normal past action");
-    expect(prompt).toContain('"be" goes only with -ing (continuous) or V3 (passive)');
-    expect(prompt).toContain("gerund vs infinitive");
-    expect(prompt).toContain("third conditional");
-    expect(prompt).toContain("translation from Russian");
-    expect(prompt).toContain("countable vs uncountable");
+    expect(prompt).toContain("2–4 short sentences, at most 60 words");
+    expect(prompt).toContain("exactly ONE question");
+    expect(prompt).toContain("THE TEXT IS HIDDEN");
+    expect(prompt).toContain("echo the CORRECT form");
+    expect(prompt).toContain("YOUR OWN ENGLISH IS THE MODEL");
     expect(prompt).toContain("Today's focus: extra be; past simple.");
+    expect(prompt).toContain('{"reply": string}');
+    expect(prompt).not.toContain("only with -ing or V3");
+    expect(prompt.length).toBeLessThan(9000);
+  });
+
+  it("gives the examiner the full be-rule, priorities and example format", () => {
+    const prompt = coachAnalysisPrompt({ ...coach, ended: false, tipsSeen: ["One verb, one past marker"] });
+    expect(prompt).toContain("LAST message");
+    expect(prompt).toContain("Priority:");
+    expect(prompt).toContain("Who did it?");
+    expect(prompt).toContain("Been vs gone");
+    expect(prompt).toContain("GENDER-NEUTRAL");
+    expect(prompt).toContain("every ✗ is IMMEDIATELY followed by its ✓");
+    expect(prompt).toContain("Never say \"be only with -ing or V3\"");
+    expect(prompt).toContain("One verb, one past marker");
     expect(prompt).toContain('"tip": {"title": string, "text": string, "ru": string, "examples": string[]} | null}');
     expect(prompt).toContain("at most 20 words");
-    expect(prompt).toContain("B1 level");
-    expect(prompt).toContain("Been vs gone");
-    expect(prompt).toContain("answer it IN THE REPLY");
-    expect(prompt).toContain("Who did it?");
-    expect(prompt.length).toBeLessThan(14000);
+    expect(prompt).toContain("gerund vs infinitive");
+    expect(prompt).toContain("countable vs uncountable");
+    expect(prompt.length).toBeLessThan(12000);
+  });
+
+  it("shows the examiner the recent transcript and the last learner line", () => {
+    const messages = buildCoachAnalysisMessages(coach);
+    expect(messages.map((m) => m.role)).toEqual(["system", "user"]);
+    expect(messages[1]?.content).toContain("COACH: Hi! What did you do at the weekend?");
+    expect(messages[1]?.content).toContain("LEARNER'S LAST MESSAGE (analyse only this): I am went to the park");
   });
 
   it("wraps up without a question on the last turn", () => {
     const prompt = coachSystemPrompt({ ...coach, ended: true });
     expect(prompt).toContain("LAST turn of the session");
     expect(prompt).toContain("wrap up");
-    expect(prompt).not.toContain("ending with exactly ONE question");
+    expect(prompt).not.toContain("end with exactly ONE question");
   });
 
   it("omits the focus line when there is no focus", () => {
@@ -107,10 +123,7 @@ describe("coach prompts", () => {
   it("starts with a user turn and replays coach turns as JSON", () => {
     const messages = buildCoachMessages({ ...coach, ended: false });
     expect(messages.map((m) => m.role)).toEqual(["system", "user", "assistant", "user"]);
-    expect(JSON.parse(messages[2]?.content ?? "")).toEqual({
-      reply: "Hi! What did you do at the weekend?",
-      correction: null,
-    });
+    expect(JSON.parse(messages[2]?.content ?? "")).toEqual({ reply: "Hi! What did you do at the weekend?" });
     expect(messages[3]?.content).toBe("I am went to the park");
   });
 

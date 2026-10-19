@@ -6,6 +6,9 @@ import {
   extractJsonObject,
   parseCoachOutput,
   stripCodeFences,
+  fixBeRule,
+  pairExamples,
+  parseCoachAnalysis,
 } from "./parse";
 
 describe("stripCodeFences", () => {
@@ -153,12 +156,27 @@ describe("coach tips", () => {
       title: "Was + -ing",
       text: "Use **was + -ing** for an action in progress.",
       ru: "Was + -ing — действие в процессе.",
-      examples: ["✓ I was walking", "✗ I was walked home"],
+      examples: ["✓ I was walking"],
     });
     expect(parseCoachOutput(JSON.stringify({ reply: "Hi! Why?", tip: { title: "" } }))?.tip).toBeNull();
     const many = parseCoachOutput(JSON.stringify({ reply: "Hi! Why?", tip: { title: "T", text: "X.", examples: ["a", "b", "c", "d", "e"] } }));
     expect(many?.tip?.examples).toEqual(["a", "b", "c"]);
     const one = parseCoachOutput(JSON.stringify({ reply: "Hi! Why?", tip: { title: "T", text: "X.", ru: null, examples: "✓ I went" } }));
     expect(one?.tip).toEqual({ title: "T", text: "X.", examples: ["✓ I went"] });
+  });
+});
+
+describe("tip safety", () => {
+  it("drops a ✗ example that has no ✓ fix right after it", () => {
+    expect(pairExamples(["✗ I was went", "✓ I went", "✗ we was cook"])).toEqual(["✗ I was went", "✓ I went"]);
+    expect(pairExamples(["≠ If I knew = now", "✓ If I had known"])).toEqual(["≠ If I knew = now", "✓ If I had known"]);
+  });
+  it("rewrites the over-simplified be rule", () => {
+    expect(fixBeRule("Was goes only with -ing or V3.")).not.toContain("only with -ing or V3");
+    expect(fixBeRule("Am goes only with -ing or V3. Work is a verb.")).toContain("adjective");
+  });
+  it("parses the examiner's JSON", () => {
+    expect(parseCoachAnalysis('{"correction":null,"tip":{"title":"T","text":"X."}}')).toEqual({ correction: null, tip: { title: "T", text: "X." } });
+    expect(parseCoachAnalysis("no json here")).toBeNull();
   });
 });

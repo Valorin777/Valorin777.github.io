@@ -72,6 +72,8 @@ export interface CoachInput {
   scenario: string;
   focus: string[];
   level: "B1" | "B2";
+  /** Titles of tips already shown, so the coach never repeats one. */
+  tipsSeen?: string[];
 }
 
 /** Must match the worker's Zod caps (worker/src/schemas.ts); longer input is cut, not rejected. */
@@ -157,7 +159,17 @@ export function clampCoachInput(input: CoachInput): CoachInput {
     .map((item) => cut(item.trim(), AI_LIMITS.focusItem))
     .filter((item) => item.length > 0)
     .slice(0, AI_LIMITS.focusItems);
-  return { history, scenario: cut(input.scenario.trim(), AI_LIMITS.scenario), focus, level: input.level };
+  const tipsSeen = (input.tipsSeen ?? [])
+    .map((t) => cut(t.trim(), 80))
+    .filter((t) => t.length > 0)
+    .slice(-20);
+  return {
+    history,
+    scenario: cut(input.scenario.trim(), AI_LIMITS.scenario),
+    focus,
+    level: input.level,
+    ...(tipsSeen.length ? { tipsSeen } : {}),
+  };
 }
 
 // ---------- response parsing ----------

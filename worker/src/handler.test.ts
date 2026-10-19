@@ -328,7 +328,7 @@ describe("POST /coach", () => {
       ended: false,
     });
     const sent = upstreamBody(h);
-    expect(sent).toMatchObject({ max_tokens: 900, response_format: { type: "json_object" } });
+    expect(sent).toMatchObject({ max_tokens: 600, response_format: { type: "json_object" } });
     const roles = (sent.messages as Array<{ role: string }>).map((m) => m.role);
     expect(roles).toEqual(["system", "user", "assistant", "user"]);
   });

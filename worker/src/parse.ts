@@ -87,17 +87,41 @@ export interface CoachOutput {
   tip: Tip | null;
 }
 
+/**
+ * The one over-simplification models keep producing ("be only with -ing or V3") would teach a
+ * false rule (I was happy is fine), so it is rewritten to the full rule wherever it appears.
+ */
+export function fixBeRule(text: string): string {
+  return text.replace(
+    /\b(?:be|was\/were|was|am|is|are)?\s*(?:goes|go|is used|are used)?\s*only with -?ing (?:or|and) (?:V3|the passive|passive)(?: passive)?/gi,
+    "be goes with -ing, V3 (passive), or an adjective, noun or place, never right before a normal verb",
+  );
+}
+
+/** Every ✗ example must be followed by its ✓; a ✗ with no fix (or a trailing ✗) is dropped. */
+export function pairExamples(examples: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < examples.length; i++) {
+    const line = examples[i] ?? "";
+    if (line.trim().startsWith("✗")) {
+      const next = examples[i + 1]?.trim() ?? "";
+      if (!next.startsWith("✓")) continue;
+    }
+    out.push(line);
+  }
+  return out;
+}
+
 function cleanTip(value: unknown): Tip | null {
   const parsed = TipSchema.safeParse(value);
   if (!parsed.success) return null;
   const title = cleanText(parsed.data.title, { maxWords: 10, bold: false });
-  const text = cleanText(parsed.data.text, { maxWords: 70, bold: true });
+  const text = fixBeRule(cleanText(parsed.data.text, { maxWords: 70, bold: true }));
   if (!title || !text) return null;
   const ru = parsed.data.ru ? cleanText(parsed.data.ru, { maxWords: 70, bold: true }) : "";
-  const examples = (parsed.data.examples ?? [])
-    .map((e) => cleanText(e, { maxWords: 25, bold: true }))
-    .filter((e): e is string => Boolean(e))
-    .slice(0, 3);
+  const examples = pairExamples(
+    (parsed.data.examples ?? []).map((e) => cleanText(e, { maxWords: 25, bold: true })).filter((e): e is string => Boolean(e)),
+  ).slice(0, 3);
   return { title, text, ...(ru ? { ru } : {}), ...(examples.length ? { examples } : {}) };
 }
 
@@ -107,7 +131,7 @@ const WHY_MAX_WORDS = 25;
 function cleanCorrection(value: unknown): Correction | null {
   const parsed = CorrectionSchema.safeParse(value);
   if (!parsed.success) return null;
-  const why = cleanText(parsed.data.why, { maxWords: WHY_MAX_WORDS, bold: false });
+  const why = fixBeRule(cleanText(parsed.data.why, { maxWords: WHY_MAX_WORDS, bold: false }));
   const wrong = cleanText(parsed.data.wrong, { maxWords: 40, bold: false });
   const right = cleanText(parsed.data.right, { maxWords: 40, bold: false });
   if (!why || !wrong || !right) return null;
@@ -160,4 +184,16 @@ export function correctionFits(correction: Correction, lastUserText: string): bo
   if (said.includes(` ${wrong} `)) return true;
   const saidWords = new Set(said.trim().split(" "));
   return wrong.split(" ").every((word) => saidWords.has(word));
+}
+
+export interface CoachAnalysis {
+  correction: Correction | null;
+  tip: Tip | null;
+}
+
+/** The examiner's JSON → { correction, tip }; null only when there is no JSON object at all. */
+export function parseCoachAnalysis(raw: string): CoachAnalysis | null {
+  const json = extractJsonObject(stripCodeFences(raw));
+  if (!json) return null;
+  return { correction: cleanCorrection(json.correction), tip: cleanTip(json.tip) };
 }

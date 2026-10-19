@@ -134,6 +134,7 @@ function CoachBody() {
           scenario: scenario.label,
           focus: scenario.focus,
           level: "B1",
+          tipsSeen: history.flatMap((t) => (t.tip ? [t.tip.title] : [])),
         },
         ctrl.signal,
       );

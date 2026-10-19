@@ -12,8 +12,8 @@ import { DEFAULT_COACH_MODEL, type Deps, type Env, type RateLimiter } from "./en
 import { ANSWER_TTL_SECONDS, FALLBACK_ANSWER_TTL_SECONDS, kvPut } from "./kv";
 import { completeWithFallback, primaryModel } from "./llm";
 import { UpstreamError } from "./openrouter";
-import { cleanText, correctionFits, parseCoachOutput } from "./parse";
-import { buildCoachMessages, buildExplainMessages, buildTranslateMessages } from "./prompts";
+import { cleanText, correctionFits, parseCoachOutput, parseCoachAnalysis } from "./parse";
+import { buildCoachMessages, buildExplainMessages, buildTranslateMessages, buildCoachAnalysisMessages } from "./prompts";
 import {
   CoachBodySchema,
   DeviceIdSchema,
@@ -35,7 +35,8 @@ import { synthesize } from "./tts";
 import { DEFAULT_VOICE, VOICES } from "./voices";
 
 export const EXPLAIN_MAX_TOKENS = 140;
-export const COACH_MAX_TOKENS = 900;
+export const COACH_MAX_TOKENS = 600;
+export const ANALYSIS_MAX_TOKENS = 900;
 /** Sonnet with a short think plus a tip takes a few seconds; give it room. */
 export const COACH_TIMEOUT_MS = 25_000;
 export const TRANSLATE_MAX_TOKENS = 900;
@@ -170,23 +171,31 @@ async function handleExplain(input: ExplainBody, env: Env, deps: Deps, requestUr
 async function handleCoach(input: CoachBody, env: Env, deps: Deps, cors: HeaderMap): Promise<Response> {
   const ended = input.history.length >= LIMITS.historyMax;
   const coachEnv = { ...env, MODEL: env.COACH_MODEL?.trim() || DEFAULT_COACH_MODEL };
-  const answer = await completeWithFallback(
-    coachEnv,
-    { ...deps, upstreamTimeoutMs: deps.upstreamTimeoutMs ?? COACH_TIMEOUT_MS },
-    {
-      messages: buildCoachMessages({ ...input, ended }),
-      maxTokens: COACH_MAX_TOKENS,
-      temperature: COACH_TEMPERATURE,
-      json: true,
-    },
-    parseCoachOutput,
-    "/coach",
-  );
-  const parsed = answer.value;
+  const coachDeps = { ...deps, upstreamTimeoutMs: deps.upstreamTimeoutMs ?? COACH_TIMEOUT_MS };
+  // Two minds at once: the conversation partner and the examiner. Same latency as one call.
+  const [talk, review] = await Promise.allSettled([
+    completeWithFallback(
+      coachEnv,
+      coachDeps,
+      { messages: buildCoachMessages({ ...input, ended }), maxTokens: COACH_MAX_TOKENS, temperature: COACH_TEMPERATURE, json: true },
+      parseCoachOutput,
+      "/coach",
+    ),
+    completeWithFallback(
+      coachEnv,
+      coachDeps,
+      { messages: buildCoachAnalysisMessages(input), maxTokens: ANALYSIS_MAX_TOKENS, temperature: 0.2, json: true },
+      parseCoachAnalysis,
+      "/coach-analysis",
+    ),
+  ]);
+  if (talk.status === "rejected") throw talk.reason;
+  const answer = talk.value;
+  const analysis = review.status === "fulfilled" ? review.value.value : { correction: null, tip: null };
   const lastUserText = input.history[input.history.length - 1]?.text ?? "";
   const correction =
-    parsed.correction && correctionFits(parsed.correction, lastUserText) ? parsed.correction : null;
-  const body: CoachResponse = { reply: parsed.reply, correction, tip: parsed.tip, ended };
+    analysis.correction && correctionFits(analysis.correction, lastUserText) ? analysis.correction : null;
+  const body: CoachResponse = { reply: answer.value.reply, correction, tip: analysis.tip, ended };
   return jsonResponse(200, body, { ...cors, "X-AI-Model": answer.model });
 }
 
