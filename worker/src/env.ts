@@ -35,6 +35,8 @@ export interface Env {
   MODEL?: string;
   /** Model for the voice coach (needs the best explanations); defaults to Claude Sonnet 5.5. */
   COACH_MODEL?: string;
+  /** Model for the coach's examiner (/coach-review); defaults to Claude Sonnet 5.5. */
+  REVIEW_MODEL?: string;
   /** Workers AI text model used when OpenRouter fails; defaults to WORKERS_AI_LLM. */
   AI_MODEL?: string;
   LIMITER?: RateLimiter;
@@ -68,3 +70,5 @@ export interface Deps {
 
 export const DEFAULT_MODEL = "anthropic/claude-haiku-5.5";
 export const DEFAULT_COACH_MODEL = "anthropic/claude-sonnet-5.5";
+/** The examiner (correction + tip); off the voice path, so it may be a little slower than the talk. */
+export const DEFAULT_REVIEW_MODEL = "anthropic/claude-sonnet-5.5";

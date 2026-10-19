@@ -7,6 +7,9 @@
   "vars": {
     "ALLOWED_ORIGINS": "https://valorin777.github.io,http://localhost:3000,http://127.0.0.1:3000",
     "MODEL": "anthropic/claude-haiku-5.5",
+    // Cheap pair: Haiku talks (fast, ~$0.0006 a reply), Sonnet checks grammar (~$0.009 a turn).
+    "COACH_MODEL": "anthropic/claude-haiku-5.5",
+    "REVIEW_MODEL": "anthropic/claude-sonnet-5.5",
     // Workers AI model used when OpenRouter fails (402 out of credits, 429, 5xx, timeout).
     "AI_MODEL": "@cf/openai/gpt-oss-120b"
   },

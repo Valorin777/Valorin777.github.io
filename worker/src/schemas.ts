@@ -53,6 +53,8 @@ export const CoachBodySchema = z.strictObject({
   level: z.enum(["B1", "B2"]),
   /** Titles of tips already shown in this conversation, so the examiner never repeats one. */
   tipsSeen: z.array(z.string().min(1).max(80)).max(20).optional(),
+  /** New clients ask for the reply only and fetch the review from /coach-review in parallel. */
+  split: z.boolean().optional(),
   /** Corrections already made in this conversation (oldest first), for consistency and repeats. */
   ledger: z
     .array(z.strictObject({ wrong: z.string().min(1).max(200), right: z.string().min(1).max(200), type: z.string().max(40).optional() }))
@@ -74,6 +76,7 @@ export const ERROR_TYPES = [
   "if-will",
   "missing-past-perfect",
   "tense-switch",
+  "missing-past-continuous",
   "will-would",
   "was-were",
   "there-was",
@@ -99,6 +102,7 @@ export const ReplyTextSchema = z.string().trim().min(1).max(2000);
 
 /** A short "tense trick" the coach adds to every turn (shown as a card, not read aloud). */
 export const TipSchema = z.object({
+  type: z.string().trim().max(40).optional(),
   title: z.string().trim().min(1).max(80),
   text: z.string().trim().min(1).max(600),
   ru: z.string().trim().max(600).nullish().transform((v) => v ?? undefined),
@@ -109,6 +113,8 @@ export const TipSchema = z.object({
     .optional(),
 });
 export interface Tip {
+  /** Error family the tip's ✗ example belongs to, if any (counted like corrections). */
+  type?: string;
   title: string;
   text: string;
   ru?: string;
@@ -126,7 +132,7 @@ export const CoachResponseSchema = z.strictObject({
     .strictObject({ wrong: z.string(), right: z.string(), why: z.string(), type: z.string().optional() })
     .nullable(),
   tip: z
-    .strictObject({ title: z.string(), text: z.string(), ru: z.string().optional(), examples: z.array(z.string()).optional() })
+    .strictObject({ type: z.string().optional(), title: z.string(), text: z.string(), ru: z.string().optional(), examples: z.array(z.string()).optional() })
     .nullable(),
   ended: z.boolean(),
 });

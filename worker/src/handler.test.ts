@@ -323,7 +323,7 @@ describe("POST /coach", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       reply: "The park sounds lovely! Who did you go with?",
-      correction: { wrong: "i am went", right: "I went", why: "Past simple needs no 'am'." },
+      correction: { wrong: "i am went", right: "I went", why: "Past simple needs no 'am'.", type: "other" },
       tip: null,
       ended: false,
     });

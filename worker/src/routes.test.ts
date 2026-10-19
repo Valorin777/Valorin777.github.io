@@ -347,7 +347,7 @@ describe("LLM fallback on /explain and /coach", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       reply: "Oh, nice! Who did you go with?",
-      correction: { wrong: "i am went", right: "I went", why: "Past simple needs no 'am'." },
+      correction: { wrong: "i am went", right: "I went", why: "Past simple needs no 'am'.", type: "other" },
       tip: null,
       ended: false,
     });
@@ -371,5 +371,29 @@ describe("preflight for the new routes", () => {
       expect(res.status).toBe(204);
       expect(res.headers.get("Access-Control-Allow-Headers")).toBe("Content-Type, X-Device-Id");
     }
+  });
+});
+
+describe("split coach: reply now, review separately", () => {
+  it("/coach with split returns only the reply; /coach-review returns correction and tip from the review model", async () => {
+    const h = harness();
+    const models: string[] = [];
+    h.fetchMock.mockImplementation(async (_url: string, init: { body: string }) => {
+      const body = JSON.parse(init.body) as { model: string };
+      models.push(body.model);
+      return new Response(
+        JSON.stringify({ choices: [{ message: { content: JSON.stringify({ reply: "So you went! Why?", correction: { wrong: "i am went", right: "I went", why: "No am before a normal verb.", type: "extra-be" }, tip: { title: "T", text: "X." } }) } }] }),
+        { status: 200 },
+      );
+    });
+    const coachBody = { history: [{ role: "assistant", text: "Hi!" }, { role: "user", text: "i am went to the park" }], scenario: "s", focus: [], level: "B1" };
+    const fast = await handleRequest(post("/coach", { ...coachBody, split: true }), h.env, h.deps);
+    expect(await fast.json()).toEqual({ reply: "So you went! Why?", correction: null, tip: null, ended: false });
+    const review = await handleRequest(post("/coach-review", { ...coachBody, ledger: [{ wrong: "i am agree", right: "I agree", type: "extra-be" }] }), h.env, h.deps);
+    const r = (await review.json()) as { correction: { why: string; type: string }; tip: { title: string } };
+    expect(r.correction.type).toBe("extra-be");
+    expect(r.correction.why).toMatch(/^Again \(2nd time\): /);
+    expect(r.tip.title).toBe("T");
+    expect(models).toEqual(["anthropic/claude-sonnet-5.5", "anthropic/claude-sonnet-5.5"]);
   });
 });

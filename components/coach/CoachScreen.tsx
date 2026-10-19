@@ -14,7 +14,7 @@ const TEXT_KEY = "b2sprint:coach-text";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useHotkeys } from "@/hooks/useHotkeys";
 import { useRecognizer } from "@/hooks/useSpeech";
-import { aiEnabled, AiError, coach, type CoachTip, type CoachTurn } from "@/lib/ai";
+import { aiEnabled, AiError, coach, coachReview, type CoachTip, type CoachTurn } from "@/lib/ai";
 import { SCENARIOS, type Scenario } from "@/lib/coachScenarios";
 import type { Category } from "@/lib/content/schema";
 import { actions, useHydrated } from "@/lib/store";
@@ -23,6 +23,8 @@ interface Turn extends CoachTurn {
   id: string;
   correction?: { wrong: string; right: string; why: string; type?: string } | null;
   tip?: CoachTip | null;
+  /** The examiner is still checking this learner turn. */
+  reviewing?: boolean;
 }
 
 /** Rough category for the error log, from what the correction changed. */
@@ -74,6 +76,8 @@ function CoachBody() {
     }
   });
   const [revealed, setRevealed] = useState<Set<string>>(() => new Set());
+  // A review can land before its reply turn exists; park the tip until then.
+  const pendingTips = useRef(new Map<string, CoachTip | null>());
   const toggleText = (on: boolean) => {
     setTextOn(on);
     try {
@@ -127,35 +131,47 @@ function CoachBody() {
     setProblem(null);
     const ctrl = new AbortController();
     abortRef.current = ctrl;
-    try {
-      const res = await coach(
-        {
-          history: nextTurns.map(({ role, text: t }) => ({ role, text: t })).slice(-30),
-          scenario: scenario.label,
-          focus: scenario.focus,
-          level: "B1",
-          tipsSeen: history.flatMap((t) => (t.tip ? [t.tip.title] : [])),
-          ledger: history.flatMap((t) =>
-            t.correction ? [{ wrong: t.correction.wrong, right: t.correction.right, ...(t.correction.type ? { type: t.correction.type } : {}) }] : [],
+    const input = {
+      history: nextTurns.map(({ role, text: t }) => ({ role, text: t })).slice(-30),
+      scenario: scenario.label,
+      focus: scenario.focus,
+      level: "B1" as const,
+      tipsSeen: history.flatMap((t) => (t.tip ? [t.tip.title] : [])),
+      ledger: history.flatMap((t) => [
+        ...(t.correction ? [{ wrong: t.correction.wrong, right: t.correction.right, ...(t.correction.type ? { type: t.correction.type } : {}) }] : []),
+        ...(t.tip?.type ? [{ wrong: t.tip.title, right: "(tip)", type: t.tip.type }] : []),
+      ]),
+    };
+    const replyId = `a${nextTurns.length}`;
+    // The examiner runs alongside; its cards land on these two turns when ready.
+    setTurns((t) => t.map((x) => (x.id === userTurn.id ? { ...x, reviewing: true } : x)));
+    void coachReview(input, ctrl.signal)
+      .then((r) => {
+        pendingTips.current.set(replyId, r.tip);
+        if (r.correction) {
+          const c = r.correction;
+          actions.recordAnswer({
+            day: 0,
+            key: `coach:${c.wrong.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60)}`,
+            correct: false,
+            category: categorize(c.wrong, c.right),
+            prompt: c.wrong,
+            given: c.wrong,
+            right: c.right,
+            rule: c.why,
+          });
+        }
+        setTurns((t) =>
+          t.map((x) =>
+            x.id === userTurn.id ? { ...x, correction: r.correction, reviewing: false } : x.id === replyId ? { ...x, tip: r.tip } : x,
           ),
-        },
-        ctrl.signal,
-      );
-      if (res.correction) {
-        const c = res.correction;
-        actions.recordAnswer({
-          day: 0,
-          key: `coach:${c.wrong.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60)}`,
-          correct: false,
-          category: categorize(c.wrong, c.right),
-          prompt: c.wrong,
-          given: c.wrong,
-          right: c.right,
-          rule: c.why,
-        });
-      }
-      const reply: Turn = { id: `a${nextTurns.length}`, role: "assistant", text: res.reply, tip: res.tip };
-      setTurns((t) => [...t.map((x) => (x.id === userTurn.id ? { ...x, correction: res.correction } : x)), reply]);
+        );
+      })
+      .catch(() => setTurns((t) => t.map((x) => (x.id === userTurn.id ? { ...x, reviewing: false } : x))));
+    try {
+      const res = await coach(input, ctrl.signal);
+      const reply: Turn = { id: replyId, role: "assistant", text: res.reply, tip: pendingTips.current.get(replyId) ?? null };
+      setTurns((t) => [...t, reply]);
       setEnded(res.ended);
       speak(res.reply, reply.id);
     } catch (e) {
@@ -313,6 +329,12 @@ function CoachBody() {
               ) : (
                 <div className="grid max-w-[30rem] justify-items-end gap-2">
                   <p className="rounded-lg rounded-tr-sm bg-accent-soft px-4 py-3 text-lesson text-text">{t.text}</p>
+                  {t.reviewing && (
+                    <p className="flex items-center gap-1.5 text-xs text-text-3" aria-live="polite">
+                      <span className="skeleton inline-block size-1.5 rounded-full" aria-hidden="true" />
+                      Проверяю…
+                    </p>
+                  )}
                   {t.correction && (
                     <div className="w-full rounded-md border border-warm/25 bg-warm-soft px-4 py-3 text-left">
                       <p className="text-sm text-text-3">

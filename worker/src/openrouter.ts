@@ -48,7 +48,7 @@ export function modelQuirks(model: string): ModelQuirks {
     temperature: !fixedSampling,
     disableReasoning: /^anthropic\/claude-haiku-5/.test(id),
     // Sonnet 5.x refuses "none" but keeps thinking short (about 2 s) at "low".
-    lowReasoning: /^anthropic\/claude-sonnet-5/.test(id),
+    lowReasoning: /^anthropic\/claude-(?:sonnet|opus)-5/.test(id),
   };
 }
 

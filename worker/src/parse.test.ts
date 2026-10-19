@@ -49,7 +49,7 @@ describe("parseCoachOutput", () => {
     );
     expect(out).toEqual({
       reply: "Sounds lovely! Who did you go with?",
-      correction: { wrong: "I am went", right: "I went", why: "Past simple has no 'be'." },
+      correction: { wrong: "I am went", right: "I went", why: "Past simple has no 'be'.", type: "other" },
       tip: null,
     });
   });
@@ -176,6 +176,11 @@ describe("tip safety", () => {
   it("rewrites the over-simplified be rule", () => {
     expect(fixBeRule("Was goes only with -ing or V3.")).not.toContain("only with -ing or V3");
     expect(fixBeRule("Am goes only with -ing or V3. Work is a verb.")).toContain("adjective");
+    expect(fixBeRule("Remember: was goes with -ing or V3, so just say I went.")).toBe(
+      "Remember: be goes with -ing, V3 (passive), or an adjective, noun or place, never right before a normal verb, so just say I went.",
+    );
+    const full = "Be goes with -ing or V3 for the passive, or an adjective or place.";
+    expect(fixBeRule(full)).toBe(full);
   });
   it("parses the examiner's JSON", () => {
     expect(parseCoachAnalysis('{"correction":null,"tip":{"title":"T","text":"X."}}')).toEqual({ correction: null, tip: { title: "T", text: "X." } });

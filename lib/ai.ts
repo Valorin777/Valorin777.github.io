@@ -56,6 +56,8 @@ export interface CoachCorrection {
 
 /** A short tense trick the coach adds to a turn (shown as a card, not read aloud). */
 export interface CoachTip {
+  /** Error family of the tip's ✗ example, counted like corrections. */
+  type?: string;
   title: string;
   text: string;
   ru?: string;
@@ -99,6 +101,8 @@ export const AI_LIMITS = {
 
 export const EXPLAIN_TIMEOUT_MS = 12_000;
 export const COACH_TIMEOUT_MS = 20_000;
+/** The examiner (Opus) is off the voice path and may take 10–15 s. */
+export const COACH_REVIEW_TIMEOUT_MS = 45_000;
 export const TRANSLATE_TIMEOUT_MS = 15_000;
 export const VOICES_TIMEOUT_MS = 8_000;
 export const CACHE_PREFIX = "b2sprint:ai:";
@@ -109,7 +113,7 @@ export const VOICES_KEY = "b2sprint:voices";
 export const VOICES_TTL_MS = 24 * 60 * 60 * 1000;
 export const DEVICE_KEY = "b2sprint:device";
 
-export type AiPath = "/explain" | "/coach" | "/health" | "/translate" | "/voices" | "/tts" | "/stt";
+export type AiPath = "/explain" | "/coach" | "/coach-review" | "/health" | "/translate" | "/voices" | "/tts" | "/stt";
 
 export function buildUrl(base: string, path: AiPath): string {
   return `${trimBaseUrl(base)}${path}`;
@@ -207,6 +211,7 @@ export function parseCoachResponse(data: unknown): CoachReply | null {
   if (isRecord(t) && typeof t.title === "string" && typeof t.text === "string" && t.title.trim() && t.text.trim()) {
     const examples = Array.isArray(t.examples) ? t.examples.filter((e): e is string => typeof e === "string").slice(0, 3) : [];
     tip = {
+      ...(typeof t.type === "string" && t.type ? { type: t.type } : {}),
       title: t.title,
       text: t.text,
       ...(typeof t.ru === "string" && t.ru.trim() ? { ru: t.ru } : {}),
@@ -655,10 +660,26 @@ export async function explain(input: ExplainInput, signal?: AbortSignal): Promis
 export async function coach(input: CoachInput, signal?: AbortSignal): Promise<CoachReply> {
   if (!aiEnabled()) throw new AiError("disabled");
   if (isOffline(currentNavigator())) throw new AiError("offline");
-  const data = await postJson("/coach", clampCoachInput(input), COACH_TIMEOUT_MS, signal);
+  // split: the reply comes back fast; correction and tip come from coachReview() in parallel.
+  const data = await postJson("/coach", { ...clampCoachInput(input), split: true }, COACH_TIMEOUT_MS, signal);
   const reply = parseCoachResponse(data);
   if (!reply) throw new AiError("unavailable", "Unexpected AI response");
   return reply;
+}
+
+export interface CoachReview {
+  correction: CoachCorrection | null;
+  tip: CoachTip | null;
+}
+
+/** The coach's examiner for the learner's last message: one correction and one tense tip. */
+export async function coachReview(input: CoachInput, signal?: AbortSignal): Promise<CoachReview> {
+  if (!aiEnabled()) throw new AiError("disabled");
+  if (isOffline(currentNavigator())) throw new AiError("offline");
+  const data = await postJson("/coach-review", clampCoachInput(input), COACH_REVIEW_TIMEOUT_MS, signal);
+  const parsed = parseCoachResponse({ reply: "-", ...(isRecord(data) ? data : {}) });
+  if (!parsed) throw new AiError("unavailable", "Unexpected AI response");
+  return { correction: parsed.correction, tip: parsed.tip };
 }
 
 /**

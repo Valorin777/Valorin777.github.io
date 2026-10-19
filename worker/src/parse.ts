@@ -93,7 +93,7 @@ export interface CoachOutput {
  */
 export function fixBeRule(text: string): string {
   return text.replace(
-    /\b(?:be|was\/were|was|am|is|are)?\s*(?:goes|go|is used|are used)?\s*only with -?ing (?:or|and) (?:V3|the passive|passive)(?: passive)?/gi,
+    /\b(?:be|was\/were|was|am|is|are)?\s*(?:goes|go|is used|are used)\s*(?:only\s+)?with -?ing (?:or|and) (?:a\s+)?(?:V3|the passive|passive)(?: passive| in (?:the )?passive)?(?![^.]*adjective)|\bonly with -?ing (?:or|and) (?:V3|the passive|passive)/gi,
     "be goes with -ing, V3 (passive), or an adjective, noun or place, never right before a normal verb",
   );
 }
@@ -122,7 +122,8 @@ function cleanTip(value: unknown): Tip | null {
   const examples = pairExamples(
     (parsed.data.examples ?? []).map((e) => cleanText(e, { maxWords: 25, bold: true })).filter((e): e is string => Boolean(e)),
   ).slice(0, 3);
-  return { title, text, ...(ru ? { ru } : {}), ...(examples.length ? { examples } : {}) };
+  const type = normalizeErrorType(parsed.data.type);
+  return { ...(type ? { type } : {}), title, text, ...(ru ? { ru } : {}), ...(examples.length ? { examples } : {}) };
 }
 
 const REPLY_MAX_WORDS = 80;
@@ -135,8 +136,7 @@ function cleanCorrection(value: unknown): Correction | null {
   const wrong = cleanText(parsed.data.wrong, { maxWords: 40, bold: false });
   const right = cleanText(parsed.data.right, { maxWords: 40, bold: false });
   if (!why || !wrong || !right) return null;
-  const type = normalizeErrorType(parsed.data.type);
-  return { wrong, right, why, ...(type ? { type } : {}) };
+  return { wrong, right, why, type: normalizeErrorType(parsed.data.type) ?? "other" };
 }
 
 export function normalizeErrorType(value: unknown): string | undefined {

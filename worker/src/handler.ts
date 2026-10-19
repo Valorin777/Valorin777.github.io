@@ -8,7 +8,7 @@ import {
   writeExplainKv,
 } from "./cache";
 import { corsHeaders, isAllowedOrigin, parseAllowedOrigins, preflightHeaders, withExposedHeaders } from "./cors";
-import { DEFAULT_COACH_MODEL, type Deps, type Env, type RateLimiter } from "./env";
+import { DEFAULT_COACH_MODEL, DEFAULT_REVIEW_MODEL, type Deps, type Env, type RateLimiter } from "./env";
 import { ANSWER_TTL_SECONDS, FALLBACK_ANSWER_TTL_SECONDS, kvPut } from "./kv";
 import { completeWithFallback, primaryModel } from "./llm";
 import { UpstreamError } from "./openrouter";
@@ -36,7 +36,9 @@ import { DEFAULT_VOICE, VOICES } from "./voices";
 
 export const EXPLAIN_MAX_TOKENS = 140;
 export const COACH_MAX_TOKENS = 600;
-export const ANALYSIS_MAX_TOKENS = 900;
+export const ANALYSIS_MAX_TOKENS = 1200;
+/** Opus with a short think needs ~10–15 s; it is off the voice path, so allow more. */
+export const REVIEW_TIMEOUT_MS = 40_000;
 /** Sonnet with a short think plus a tip takes a few seconds; give it room. */
 export const COACH_TIMEOUT_MS = 25_000;
 export const TRANSLATE_MAX_TOKENS = 900;
@@ -52,8 +54,8 @@ export const FALLBACK_AUDIO_CACHE_CONTROL = "public, max-age=86400";
 const VOICES_CACHE_CONTROL = "public, max-age=3600";
 
 type HeaderMap = Record<string, string>;
-type PostRoute = "/explain" | "/coach" | "/translate" | "/tts" | "/stt";
-const POST_ROUTES: readonly string[] = ["/explain", "/coach", "/translate", "/tts", "/stt"];
+type PostRoute = "/explain" | "/coach" | "/coach-review" | "/translate" | "/tts" | "/stt";
+const POST_ROUTES: readonly string[] = ["/explain", "/coach", "/coach-review", "/translate", "/tts", "/stt"];
 
 export function jsonResponse(status: number, body: unknown, headers: HeaderMap = {}): Response {
   return new Response(JSON.stringify(body), {
@@ -168,11 +170,42 @@ async function handleExplain(input: ExplainBody, env: Env, deps: Deps, requestUr
   return jsonResponse(200, { text, cached: false }, { ...cors, "X-AI-Model": answer.model, "X-Cache": "miss" });
 }
 
+/** The examiner alone: one correction and one tip for the learner's last message. */
+async function reviewCoachTurn(input: CoachBody, env: Env, deps: Deps, model: string): Promise<{ correction: CoachResponse["correction"]; tip: CoachResponse["tip"]; model: string }> {
+  const answer = await completeWithFallback(
+    { ...env, MODEL: model },
+    { ...deps, upstreamTimeoutMs: deps.upstreamTimeoutMs ?? REVIEW_TIMEOUT_MS },
+    { messages: buildCoachAnalysisMessages(input), maxTokens: ANALYSIS_MAX_TOKENS, temperature: 0.2, json: true },
+    parseCoachAnalysis,
+    "/coach-review",
+  );
+  const lastUserText = input.history[input.history.length - 1]?.text ?? "";
+  const c = answer.value.correction;
+  const correction = c && correctionFits(c, lastUserText) ? escalate(c, input.ledger) : null;
+  return { correction, tip: answer.value.tip, model: answer.model };
+}
+
+async function handleCoachReview(input: CoachBody, env: Env, deps: Deps, cors: HeaderMap): Promise<Response> {
+  const review = await reviewCoachTurn(input, env, deps, env.REVIEW_MODEL?.trim() || DEFAULT_REVIEW_MODEL);
+  return jsonResponse(200, { correction: review.correction, tip: review.tip }, { ...cors, "X-AI-Model": review.model });
+}
+
 async function handleCoach(input: CoachBody, env: Env, deps: Deps, cors: HeaderMap): Promise<Response> {
   const ended = input.history.length >= LIMITS.historyMax;
   const coachEnv = { ...env, MODEL: env.COACH_MODEL?.trim() || DEFAULT_COACH_MODEL };
   const coachDeps = { ...deps, upstreamTimeoutMs: deps.upstreamTimeoutMs ?? COACH_TIMEOUT_MS };
   // Two minds at once: the conversation partner and the examiner. Same latency as one call.
+  if (input.split) {
+    const answer = await completeWithFallback(
+      coachEnv,
+      coachDeps,
+      { messages: buildCoachMessages({ ...input, ended }), maxTokens: COACH_MAX_TOKENS, temperature: COACH_TEMPERATURE, json: true },
+      parseCoachOutput,
+      "/coach",
+    );
+    const body: CoachResponse = { reply: fixBeRule(answer.value.reply), correction: null, tip: null, ended };
+    return jsonResponse(200, body, { ...cors, "X-AI-Model": answer.model });
+  }
   const [talk, review] = await Promise.allSettled([
     completeWithFallback(
       coachEnv,
@@ -263,6 +296,10 @@ async function handleJsonRoute(path: PostRoute, value: unknown, env: Env, deps: 
     case "/coach": {
       const input = CoachBodySchema.safeParse(value);
       return input.success ? handleCoach(input.data, env, deps, cors) : invalid();
+    }
+    case "/coach-review": {
+      const input = CoachBodySchema.safeParse(value);
+      return input.success ? handleCoachReview(input.data, env, deps, cors) : invalid();
     }
     case "/translate": {
       const input = TranslateBodySchema.safeParse(value);
