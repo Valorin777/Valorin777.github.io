@@ -1,0 +1,270 @@
+@import "tailwindcss";
+
+/*
+ * B2 Sprint design tokens — "first class cabin".
+ * Warm ivory paper in light, deep blue-grey cabin at night (never pure black).
+ * One accent (calm ink blue). Feedback uses tints, never alarm red.
+ * Colours are OKLCH so light and dark keep the same perceived steps.
+ * Contrast pairs are checked in lib/tokens.test.ts (AA).
+ */
+
+:root {
+  color-scheme: light;
+
+  /* surfaces */
+  --bg: oklch(0.982 0.006 84);
+  --surface: oklch(0.996 0.003 84);
+  --surface-2: oklch(0.962 0.007 84);
+  --surface-3: oklch(0.935 0.009 84);
+  --line: oklch(0.895 0.008 84);
+  --line-strong: oklch(0.82 0.01 84);
+
+  /* text */
+  --text: oklch(0.235 0.014 262);
+  --text-2: oklch(0.43 0.014 262);
+  --text-3: oklch(0.52 0.012 262);
+
+  /* accent */
+  --accent: oklch(0.47 0.105 252);
+  --accent-hover: oklch(0.42 0.105 252);
+  --accent-ink: oklch(0.99 0.004 252);
+  --accent-soft: oklch(0.945 0.024 252);
+  --accent-text: oklch(0.44 0.11 252);
+
+  /* feedback */
+  --good: oklch(0.47 0.09 158);
+  --good-soft: oklch(0.95 0.03 158);
+  --warm: oklch(0.5 0.1 62);
+  --warm-soft: oklch(0.955 0.032 78);
+
+  --focus: oklch(0.56 0.14 252);
+  --scrim: oklch(0.2 0.02 262 / 0.32);
+
+  /* elevation: soft and layered, light from above */
+  --shadow-1: 0 1px 1px oklch(0.3 0.02 262 / 0.04), 0 1px 3px oklch(0.3 0.02 262 / 0.05);
+  --shadow-2: 0 1px 2px oklch(0.3 0.02 262 / 0.04), 0 4px 12px oklch(0.3 0.02 262 / 0.06),
+    0 12px 32px oklch(0.3 0.02 262 / 0.05);
+  --shadow-3: 0 2px 4px oklch(0.3 0.02 262 / 0.05), 0 12px 28px oklch(0.3 0.02 262 / 0.1),
+    0 32px 64px oklch(0.3 0.02 262 / 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: oklch(0.205 0.014 262);
+    --surface: oklch(0.238 0.015 262);
+    --surface-2: oklch(0.268 0.016 262);
+    --surface-3: oklch(0.3 0.017 262);
+    --line: oklch(0.318 0.016 262);
+    --line-strong: oklch(0.4 0.018 262);
+    --text: oklch(0.945 0.008 84);
+    --text-2: oklch(0.8 0.01 84);
+    --text-3: oklch(0.7 0.01 262);
+    --accent: oklch(0.76 0.095 252);
+    --accent-hover: oklch(0.81 0.085 252);
+    --accent-ink: oklch(0.2 0.03 262);
+    --accent-soft: oklch(0.3 0.04 252);
+    --accent-text: oklch(0.8 0.09 252);
+    --good: oklch(0.8 0.11 158);
+    --good-soft: oklch(0.3 0.045 158);
+    --warm: oklch(0.83 0.1 78);
+    --warm-soft: oklch(0.31 0.045 70);
+    --focus: oklch(0.8 0.11 252);
+    --scrim: oklch(0.1 0.01 262 / 0.55);
+    --shadow-1: 0 0 0 1px oklch(1 0 0 / 0.03), 0 1px 2px oklch(0 0 0 / 0.3);
+    --shadow-2: 0 0 0 1px oklch(1 0 0 / 0.035), 0 4px 12px oklch(0 0 0 / 0.28),
+      0 12px 32px oklch(0 0 0 / 0.22);
+    --shadow-3: 0 0 0 1px oklch(1 0 0 / 0.04), 0 12px 28px oklch(0 0 0 / 0.36),
+      0 32px 64px oklch(0 0 0 / 0.3);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: oklch(0.205 0.014 262);
+  --surface: oklch(0.238 0.015 262);
+  --surface-2: oklch(0.268 0.016 262);
+  --surface-3: oklch(0.3 0.017 262);
+  --line: oklch(0.318 0.016 262);
+  --line-strong: oklch(0.4 0.018 262);
+  --text: oklch(0.945 0.008 84);
+  --text-2: oklch(0.8 0.01 84);
+  --text-3: oklch(0.7 0.01 262);
+  --accent: oklch(0.76 0.095 252);
+  --accent-hover: oklch(0.81 0.085 252);
+  --accent-ink: oklch(0.2 0.03 262);
+  --accent-soft: oklch(0.3 0.04 252);
+  --accent-text: oklch(0.8 0.09 252);
+  --good: oklch(0.8 0.11 158);
+  --good-soft: oklch(0.3 0.045 158);
+  --warm: oklch(0.83 0.1 78);
+  --warm-soft: oklch(0.31 0.045 70);
+  --focus: oklch(0.8 0.11 252);
+  --scrim: oklch(0.1 0.01 262 / 0.55);
+  --shadow-1: 0 0 0 1px oklch(1 0 0 / 0.03), 0 1px 2px oklch(0 0 0 / 0.3);
+  --shadow-2: 0 0 0 1px oklch(1 0 0 / 0.035), 0 4px 12px oklch(0 0 0 / 0.28),
+    0 12px 32px oklch(0 0 0 / 0.22);
+  --shadow-3: 0 0 0 1px oklch(1 0 0 / 0.04), 0 12px 28px oklch(0 0 0 / 0.36),
+    0 32px 64px oklch(0 0 0 / 0.3);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-text: var(--text);
+  --color-text-2: var(--text-2);
+  --color-text-3: var(--text-3);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-text: var(--accent-text);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --color-warm: var(--warm);
+  --color-warm-soft: var(--warm-soft);
+  --color-focus: var(--focus);
+  --color-scrim: var(--scrim);
+
+  --font-sans: var(--font-ui), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif: var(--font-display), ui-serif, Georgia, "Times New Roman", serif;
+
+  /* type scale (1.2 minor third, lesson body at 19px) */
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.25rem;
+  --text-sm: 0.9375rem;
+  --text-sm--line-height: 1.375rem;
+  --text-base: 1.0625rem;
+  --text-base--line-height: 1.625rem;
+  --text-lesson: 1.1875rem;
+  --text-lesson--line-height: 1.875rem;
+  --text-lg: 1.375rem;
+  --text-lg--line-height: 1.875rem;
+  --text-xl: 1.75rem;
+  --text-xl--line-height: 2.125rem;
+  --text-2xl: clamp(2rem, 1.6rem + 1.6vw, 2.5rem);
+  --text-2xl--line-height: 1.12;
+  --text-3xl: clamp(2.5rem, 1.9rem + 2.4vw, 3.25rem);
+  --text-3xl--line-height: 1.06;
+
+  --radius-sm: 0.625rem;
+  --radius-md: 1rem;
+  --radius-lg: 1.5rem;
+  --radius-xl: 2rem;
+
+  --shadow-1: var(--shadow-1);
+  --shadow-2: var(--shadow-2);
+  --shadow-3: var(--shadow-3);
+
+  /* Emil Kowalski: strong ease-out for anything entering or responding to the user */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+
+  --container-reading: 38rem; /* ~65 characters of lesson text */
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: var(--text-base--line-height);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "ss01" 0;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-serif);
+    font-weight: 500;
+    letter-spacing: -0.012em;
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 3px;
+    border-radius: 6px;
+  }
+  ::selection {
+    background: var(--accent-soft);
+    color: var(--text);
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: default;
+  }
+}
+
+@layer utilities {
+  .pb-safe {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+  .pt-safe {
+    padding-top: max(0.75rem, env(safe-area-inset-top));
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  /* press feedback within one frame, interruptible (transition, not keyframes) */
+  .press {
+    transition: transform 160ms var(--ease-out), background-color 160ms var(--ease-out),
+      border-color 160ms var(--ease-out), color 160ms var(--ease-out), box-shadow 160ms var(--ease-out),
+      opacity 160ms var(--ease-out);
+  }
+  .press:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .press:active:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* skeleton shimmer (opacity only) */
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.skeleton {
+  background: var(--surface-3);
+  border-radius: var(--radius-sm);
+  animation: skeleton-pulse 1.6s ease-in-out infinite;
+}

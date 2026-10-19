@@ -1,0 +1,37 @@
+import { z } from "zod";
+import { DayMetaSchema, DaySchema, type Day, type DayMeta, type Topic } from "@/lib/content/schema";
+import { day1 } from "@/content/days/day-1";
+import { dayMeta } from "@/content/days/meta";
+
+/*
+ * Parsed at module load: an invalid content file throws here, which fails the build,
+ * the unit tests and `npm run content:check`.
+ */
+function parseOrThrow<S extends z.ZodType>(schema: S, input: unknown, label: string): z.output<S> {
+  const result = schema.safeParse(input);
+  if (!result.success) throw new Error(`Invalid content in ${label}:\n${z.prettifyError(result.error)}`);
+  return result.data;
+}
+
+/** Every written day, ordered by number. */
+export const DAYS: Day[] = [day1]
+  .map((d) => parseOrThrow(DaySchema, d, `day ${d.number}`))
+  .sort((a, b) => a.number - b.number);
+
+const META: DayMeta[] = dayMeta
+  .map((m) => parseOrThrow(DayMetaSchema, m, `day meta ${m.number}`))
+  .sort((a, b) => a.number - b.number);
+
+/** The day's content, or null when that day is not written yet. */
+export function getDay(n: number): Day | null {
+  return DAYS.find((d) => d.number === n) ?? null;
+}
+
+/** All seven days for the home screen, including those not available yet. */
+export function listDays(): DayMeta[] {
+  return META;
+}
+
+export function findTopic(day: Day, topicId: string): Topic | undefined {
+  return day.topics.find((t) => t.id === topicId);
+}
