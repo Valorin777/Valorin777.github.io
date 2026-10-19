@@ -6,24 +6,10 @@ import { PlayButton } from "@/components/speech/SpeechProvider";
 import { RichText } from "@/components/ui/RichText";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { aiEnabled, explain } from "@/lib/ai";
-import { readableExercise, reorderSentence } from "@/lib/answers";
+import { readableExercise } from "@/lib/answers";
+import { fullSentence } from "@/lib/sentences";
 import type { Exercise, Topic } from "@/lib/content/schema";
 import type { ExerciseStatus } from "@/components/exercises/types";
-
-/** The whole correct sentence, for listening. */
-export function fullSentence(ex: Exercise): string {
-  switch (ex.type) {
-    case "choice":
-    case "collocation":
-      return ex.prompt.replace("___", ex.options[ex.answer]);
-    case "fill":
-      return `${ex.before} ${ex.answers[0]}${/^[.,!?;:]/.test(ex.after) ? "" : " "}${ex.after}`.trim();
-    case "errorTap":
-      return ex.correct;
-    case "reorder":
-      return reorderSentence(ex.words, ex.end);
-  }
-}
 
 type AiState = { status: "idle" | "loading" | "done" | "failed"; text?: string };
 

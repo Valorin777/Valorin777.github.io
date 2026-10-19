@@ -247,7 +247,7 @@ export const DaySchema = z
     goal: Text,
     topics: z.array(TopicSchema).min(1).max(5),
     speak: z.array(SpeakItemSchema).min(6).max(14),
-    phrases: z.array(PhraseSchema).min(4).max(20),
+    phrases: z.array(PhraseSchema).min(4).max(30),
   })
   .superRefine((day, ctx) => {
     const ids = new Set<string>();
@@ -275,3 +275,83 @@ export type DayMeta = z.infer<typeof DayMetaSchema>;
 
 /** Type for authoring content files: `export const day1 = { ... } satisfies DayInput`. */
 export type DayInput = z.input<typeof DaySchema>;
+
+/* ------------------------------------------------------- Day 7: final test */
+
+/** Use of English Part 1 gap: multiple-choice cloze, four options, one right. */
+export const ChoiceGapSchema = z
+  .object({
+    options: z.array(Text).length(4),
+    answer: z.number().int().min(0).max(3),
+    category: CategorySchema,
+    /** One sentence: why this option and not the others. */
+    explain: Text,
+  })
+  .refine((g) => new Set(g.options).size === 4, { message: "duplicate options" });
+export type ChoiceGap = z.infer<typeof ChoiceGapSchema>;
+
+/** Use of English Part 2 gap: open cloze, exactly one word. */
+export const OpenGapSchema = z.object({
+  /** Accepted single words (no spaces), first is the model answer. */
+  answers: z.array(Text.regex(/^[A-Za-z']+$/, "one word only")).min(1).max(4),
+  category: CategorySchema,
+  explain: Text,
+});
+export type OpenGap = z.infer<typeof OpenGapSchema>;
+
+const gapMarkers = (text: string) => [...text.matchAll(/\{\{(\d+)\}\}/g)].map((m) => Number(m[1]));
+
+function clozeText<G extends z.ZodTypeAny>(gap: G) {
+  return z
+    .object({
+      id: Id,
+      title: Text,
+      /**
+       * The text with numbered gaps {{1}}, {{2}}, … in reading order (numbers restart at 1 in
+       * every text). Gap n is gaps[n - 1].
+       */
+      text: Text,
+      gaps: z.array(gap).min(6).max(8),
+    })
+    .refine((t) => {
+      const m = gapMarkers(t.text);
+      return m.length === t.gaps.length && m.every((n, i) => n === i + 1);
+    }, { message: "gap markers must be {{1}}…{{n}} in order, one per gap" });
+}
+
+export const ChoiceClozeSchema = clozeText(ChoiceGapSchema);
+export const OpenClozeSchema = clozeText(OpenGapSchema);
+export type ChoiceCloze = z.infer<typeof ChoiceClozeSchema>;
+export type OpenCloze = z.infer<typeof OpenClozeSchema>;
+
+export const FinalDaySchema = z.object({
+  number: z.literal(7),
+  title: Text,
+  subtitle: Text,
+  goal: Text,
+  /** Two or three calm sentences shown before the test: format, timing, no pressure. */
+  intro: Text,
+  /** Use of English Part 1: multiple-choice cloze texts. */
+  part1: z.array(ChoiceClozeSchema).min(2).max(2),
+  /** Use of English Part 2: open cloze texts. */
+  part2: z.array(OpenClozeSchema).min(2).max(2),
+  /** Final spoken review across the whole course. */
+  speak: z.array(SpeakItemSchema).min(8).max(14),
+});
+export type FinalDay = z.infer<typeof FinalDaySchema>;
+export type FinalDayInput = z.input<typeof FinalDaySchema>;
+
+/* -------------------------------------------------------------- diagnostic */
+
+/** First-visit check: one gap, three or four options, tagged with the weak spot it probes. */
+export const DiagnosticItemSchema = z
+  .object({
+    id: Id,
+    prompt: Text.refine((p) => p.includes("___"), "prompt needs a ___ gap"),
+    options: z.array(Text).min(3).max(4),
+    answer: z.number().int().min(0),
+    category: CategorySchema,
+  })
+  .refine((e) => e.answer < e.options.length, { message: "answer index out of range" });
+export const DiagnosticSchema = z.array(DiagnosticItemSchema).min(8).max(12);
+export type DiagnosticItem = z.infer<typeof DiagnosticItemSchema>;

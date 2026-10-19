@@ -5,6 +5,7 @@ import {
   getSupport,
   listen,
   loadVoices,
+  prefetchNeuralSpeech,
   speak as speakText,
   subscribeVoices,
   type RecognitionError,
@@ -78,8 +79,10 @@ export interface Speaker {
   speaking: boolean;
 }
 
-export function useSpeaker(opts: { voiceURI: string | null; rate: number }): Speaker {
+/** `neuralVoice` (a worker voice id) plays the natural voice when online, else the device voice. */
+export function useSpeaker(opts: { voiceURI: string | null; rate: number; neuralVoice?: string | null }): Speaker {
   const { voiceURI, rate } = opts;
+  const neuralVoice = opts.neuralVoice ?? null;
   const [current, setCurrent] = useState<{ id: string | null } | null>(null);
   const cancelRef = useRef<(() => void) | null>(null);
   const tokenRef = useRef(0);
@@ -100,6 +103,7 @@ export function useSpeaker(opts: { voiceURI: string | null; rate: number }): Spe
       setCurrent({ id: id ?? null });
       cancelRef.current = speakText(text, {
         voiceURI,
+        neuralVoice,
         rate,
         onEnd: () => {
           if (tokenRef.current !== token) return;
@@ -108,7 +112,7 @@ export function useSpeaker(opts: { voiceURI: string | null; rate: number }): Spe
         },
       });
     },
-    [voiceURI, rate],
+    [voiceURI, neuralVoice, rate],
   );
 
   useEffect(() => {
@@ -123,6 +127,22 @@ export function useSpeaker(opts: { voiceURI: string | null; rate: number }): Spe
   }, []);
 
   return { speak, stop, speakingId: current?.id ?? null, speaking: current !== null };
+}
+
+const PREFETCH_DELAY_MS = 400;
+const TEXT_SEPARATOR = "\u0001";
+
+/**
+ * Warms the natural-voice cache for the sentences on screen, so the first tap plays at once.
+ * Runs shortly after mount (not competing with the page's own requests) and when the texts change.
+ */
+export function usePrefetchSpeech(texts: readonly string[], neuralVoice: string | null | undefined): void {
+  const joined = texts.join(TEXT_SEPARATOR);
+  useEffect(() => {
+    if (!neuralVoice || !joined) return;
+    const timer = setTimeout(() => prefetchNeuralSpeech(joined.split(TEXT_SEPARATOR), neuralVoice), PREFETCH_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [joined, neuralVoice]);
 }
 
 /* --------------------------------------------------------------- recognizer */

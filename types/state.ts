@@ -12,6 +12,11 @@ export interface Settings {
   theme: ThemePref;
   /** SpeechSynthesisVoice.voiceURI the learner picked; null = best available English voice. */
   voiceURI: string | null;
+  /**
+   * Natural (neural, server) voice for lessons and the coach, e.g. "asteria". null = use the
+   * device voice only. Falls back to the device voice offline or when the server is busy.
+   */
+  neuralVoice: string | null;
   /** Speech rate for TTS, 0.6–1.2. */
   rate: number;
   /** Soft answer sounds. Off by default. */
@@ -106,9 +111,42 @@ export interface Streak {
   lastDay: string | null;
 }
 
+export interface CategoryScore {
+  correct: number;
+  total: number;
+}
+
+export type LevelEstimate = "B1-" | "B1" | "B1+" | "B2";
+
+/** First-visit mini diagnostic. */
+export interface DiagnosticResult {
+  completedAt: string;
+  /** null when the learner skipped it. */
+  level: LevelEstimate | null;
+  byCategory: Partial<Record<Category, CategoryScore>>;
+  /** Weakest categories first; drives which drills appear first. */
+  focus: Category[];
+}
+
+/** Day 7 Use of English test. Gap keys are "<textId>:<n>". */
+export interface FinalTestResult {
+  completedAt: string;
+  answers: Record<string, { given: string; correct: boolean }>;
+  part1: CategoryScore;
+  part2: CategoryScore;
+  byCategory: Partial<Record<Category, CategoryScore>>;
+  /** 0–100. */
+  percent: number;
+  band: "B2 ready" | "Nearly B2" | "Strong B1" | "B1";
+}
+
 export interface AppState {
   version: 1;
+  /** Last local change (ISO). Used to merge with the cloud copy. */
+  updatedAt: string;
   settings: Settings;
+  diagnostic: DiagnosticResult | null;
+  finalTest: FinalTestResult | null;
   position: Position | null;
   days: Record<number, DayProgress>;
   cards: Record<string, Card>;

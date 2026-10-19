@@ -3,25 +3,36 @@ import {
   AI_LIMITS,
   AiError,
   CACHE_PREFIX,
+  FALLBACK_VOICES,
+  TRANSLATE_CACHE_MAX_ENTRIES,
+  TRANSLATE_CACHE_PREFIX,
+  VOICES_KEY,
   aiEnabled,
   buildUrl,
   clampCoachInput,
   clampExplainInput,
   coach,
+  detectLang,
   errorKindForFailure,
   errorKindForStatus,
   explain,
   explainCacheKey,
   fallbackUuid,
+  fetchVoices,
   isDeviceId,
   isOffline,
   newDeviceId,
   normalizeGiven,
+  normalizeTranslateText,
   parseCoachResponse,
   parseExplainResponse,
+  parseTranslateResponse,
+  parseVoicesResponse,
   readCachedExplain,
   selectEvictions,
   smallHash,
+  translate,
+  translateCacheKey,
   trimBaseUrl,
   writeCachedExplain,
   type ExplainInput,
@@ -343,5 +354,246 @@ describe("explain() and coach() against a stubbed worker", () => {
     const error: unknown = await pending.catch((e: unknown) => e);
     expect(error).not.toBeInstanceOf(mod.AiError);
     expect((error as { name?: string }).name).toBe("AbortError");
+  });
+});
+
+describe("translation helpers", () => {
+  it("keys the cache by target and normalized text", () => {
+    const key = translateCacheKey({ text: "I’ve  been waiting", to: "ru" });
+    expect(key.startsWith(TRANSLATE_CACHE_PREFIX)).toBe(true);
+    expect(translateCacheKey({ text: " I've been\nwaiting ", to: "ru" })).toBe(key);
+    expect(translateCacheKey({ text: "I've been waiting", to: "auto" })).not.toBe(key);
+    expect(translateCacheKey({ text: "I've been waiting?", to: "ru" })).not.toBe(key);
+    expect(normalizeTranslateText("  a  b ")).toBe("a b");
+  });
+
+  it("parses results, filters notes and falls back on the detected language", () => {
+    expect(
+      parseTranslateResponse({
+        translation: "Не трать деньги впустую.",
+        from: "en",
+        notes: [{ phrase: "waste money", meaning: "тратить впустую" }, { phrase: 1 }, { phrase: " ", meaning: "x" }],
+      }),
+    ).toEqual({
+      translation: "Не трать деньги впустую.",
+      from: "en",
+      notes: [{ phrase: "waste money", meaning: "тратить впустую" }],
+    });
+    expect(parseTranslateResponse({ translation: "Hello" }, "Привет")).toEqual({
+      translation: "Hello",
+      from: "ru",
+      notes: [],
+    });
+    expect(parseTranslateResponse({ translation: " " })).toBeNull();
+    expect(parseTranslateResponse({ error: "x" })).toBeNull();
+    expect(detectLang("hello")).toBe("en");
+    expect(detectLang("Ёлка")).toBe("ru");
+  });
+});
+
+describe("voice list helpers", () => {
+  it("keeps valid voices, drops junk and repairs a missing default", () => {
+    expect(
+      parseVoicesResponse({
+        voices: [
+          { id: "a1-luna", label: "Luna · US", accent: "US", gender: "female", model: "aura-1" },
+          { id: "a1-luna", label: "dup", accent: "US", gender: "female" },
+          { id: "bad id!", label: "x", accent: "US", gender: "male" },
+          { id: "a1-orion", label: "", accent: "US", gender: "robot" },
+          { id: "a1-helios", label: "Helios · UK", accent: "UK", gender: "male" },
+        ],
+        default: "gone",
+      }),
+    ).toEqual({
+      voices: [
+        { id: "a1-luna", label: "Luna · US", accent: "US", gender: "female" },
+        { id: "a1-helios", label: "Helios · UK", accent: "UK", gender: "male" },
+      ],
+      default: "a1-luna",
+    });
+    expect(parseVoicesResponse({ voices: [] })).toBeNull();
+    expect(parseVoicesResponse(null)).toBeNull();
+  });
+
+  it("ships the built-in fallback list", () => {
+    expect(FALLBACK_VOICES.map((v) => v.id)).toEqual([
+      "a1-asteria",
+      "a1-luna",
+      "a1-athena",
+      "a1-helios",
+      "a1-orion",
+      "a1-arcas",
+    ]);
+    expect(FALLBACK_VOICES.find((v) => v.id === "a1-helios")).toEqual({
+      id: "a1-helios",
+      label: "Helios · UK",
+      accent: "UK",
+      gender: "male",
+    });
+  });
+});
+
+describe("translate() and fetchVoices() against a stubbed worker", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  async function load(fetchImpl: (url: string, init: RequestInit) => Promise<Response>, storage = new MemoryStorage()) {
+    vi.resetModules();
+    vi.stubEnv("NEXT_PUBLIC_AI_URL", "https://ai.example.dev");
+    vi.stubGlobal("window", { localStorage: storage });
+    const fetchMock = vi.fn(fetchImpl);
+    vi.stubGlobal("fetch", fetchMock);
+    const mod = await import("@/lib/ai");
+    return { mod, storage, fetchMock };
+  }
+
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+
+  const translation = { translation: "Не трать деньги впустую.", from: "en", notes: [] };
+
+  it("rejects when AI is off", async () => {
+    await expect(translate({ text: "hi", to: "ru" })).rejects.toMatchObject({ kind: "disabled" });
+    await expect(fetchVoices()).rejects.toMatchObject({ kind: "disabled" });
+  });
+
+  it("translate posts { text, to }, then answers from localStorage", async () => {
+    const { mod, storage, fetchMock } = await load(async () => json(translation));
+    const result = await mod.translate({ text: "  Don't waste   money. ", to: "auto" });
+    expect(result).toEqual(translation);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://ai.example.dev/translate");
+    expect(JSON.parse(String(init.body))).toEqual({ text: "Don't waste money.", to: "auto" });
+    expect(isDeviceId((init.headers as Record<string, string>)["X-Device-Id"] ?? "")).toBe(true);
+    const keys = [...storage.map.keys()].filter((k) => k.startsWith(TRANSLATE_CACHE_PREFIX));
+    expect(keys).toHaveLength(1);
+
+    expect(await mod.translate({ text: "Don't waste money.", to: "auto" })).toEqual(translation);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await mod.translate({ text: "Don't waste money.", to: "ru" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("translate cuts long text and refuses empty text", async () => {
+    const { mod, fetchMock } = await load(async () => json(translation));
+    await mod.translate({ text: "x".repeat(900), to: "ru" });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect((JSON.parse(String(init.body)) as { text: string }).text).toHaveLength(AI_LIMITS.translateText);
+    await expect(mod.translate({ text: "   ", to: "ru" })).rejects.toMatchObject({ kind: "unavailable" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("translate maps errors like explain and works offline from the cache", async () => {
+    const limited = await load(async () => json({ error: "rate-limit" }, 429));
+    await expect(limited.mod.translate({ text: "a", to: "ru" })).rejects.toMatchObject({ kind: "rate-limit" });
+    const broken = await load(async () => json({ error: "upstream" }, 502));
+    await expect(broken.mod.translate({ text: "a", to: "ru" })).rejects.toMatchObject({ kind: "unavailable" });
+    const junk = await load(async () => json({ nope: true }));
+    await expect(junk.mod.translate({ text: "a", to: "ru" })).rejects.toMatchObject({ kind: "unavailable" });
+
+    const { mod, fetchMock } = await load(async () => json(translation));
+    await mod.translate({ text: "Seen before", to: "ru" });
+    vi.stubGlobal("navigator", { onLine: false });
+    expect(await mod.translate({ text: "Seen before", to: "ru" })).toEqual(translation);
+    await expect(mod.translate({ text: "New", to: "ru" })).rejects.toMatchObject({ kind: "offline" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("translate times out after 15 s", async () => {
+    vi.useFakeTimers();
+    const { mod } = await load(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+        }),
+    );
+    const assertion = expect(mod.translate({ text: "a", to: "ru" })).rejects.toMatchObject({ kind: "timeout" });
+    await vi.advanceTimersByTimeAsync(15_000);
+    await assertion;
+  });
+
+  it("translate cache is separate from the explanation cache and capped", async () => {
+    const storage = new MemoryStorage();
+    storage.setItem(`${CACHE_PREFIX}keep`, JSON.stringify({ t: 0, text: "explanation" }));
+    for (let i = 0; i < TRANSLATE_CACHE_MAX_ENTRIES; i++) {
+      storage.setItem(`${TRANSLATE_CACHE_PREFIX}old${i}`, JSON.stringify({ t: i + 1, text: "{}" }));
+    }
+    const { mod } = await load(async () => json(translation), storage);
+    await mod.translate({ text: "one more", to: "ru" });
+    const count = [...storage.map.keys()].filter((k) => k.startsWith(TRANSLATE_CACHE_PREFIX)).length;
+    expect(count).toBe(TRANSLATE_CACHE_MAX_ENTRIES);
+    expect(storage.getItem(`${TRANSLATE_CACHE_PREFIX}old0`)).toBeNull();
+    expect(storage.getItem(`${CACHE_PREFIX}keep`)).not.toBeNull();
+  });
+
+  const voices = {
+    voices: [
+      { id: "a1-luna", label: "Luna · US", accent: "US", gender: "female", model: "aura-1" },
+      { id: "a1-helios", label: "Helios · UK", accent: "UK", gender: "male", model: "aura-1" },
+    ],
+    default: "a1-helios",
+  };
+
+  it("fetchVoices GETs without custom headers and caches for a day", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-19T10:00:00Z"));
+    const { mod, storage, fetchMock } = await load(async () => json(voices));
+    const list = await mod.fetchVoices();
+    expect(list.default).toBe("a1-helios");
+    expect(list.voices.map((v) => v.id)).toEqual(["a1-luna", "a1-helios"]);
+    expect(list.voices[0]).not.toHaveProperty("model");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://ai.example.dev/voices");
+    expect(init.method).toBe("GET");
+    expect(init.headers).toBeUndefined();
+    expect(storage.getItem(VOICES_KEY)).not.toBeNull();
+
+    await mod.fetchVoices();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // A new page load reads localStorage instead of the network.
+    const again = await load(async () => json(voices), storage);
+    expect((await again.mod.fetchVoices()).default).toBe("a1-helios");
+    expect(again.fetchMock).not.toHaveBeenCalled();
+
+    vi.setSystemTime(new Date("2026-10-20T10:00:01Z"));
+    await again.mod.fetchVoices();
+    expect(again.fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("fetchVoices falls back to the last list, else the built-in one", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-19T10:00:00Z"));
+    const down = await load(async () => json({ error: "upstream" }, 502));
+    expect(await down.mod.fetchVoices()).toEqual({ voices: FALLBACK_VOICES, default: "a1-asteria" });
+
+    const storage = new MemoryStorage();
+    const first = await load(async () => json(voices), storage);
+    await first.mod.fetchVoices();
+    vi.setSystemTime(new Date("2026-10-22T10:00:00Z"));
+    const stale = await load(async () => Promise.reject(new TypeError("Failed to fetch")), storage);
+    expect((await stale.mod.fetchVoices()).default).toBe("a1-helios");
+
+    const offline = await load(async () => json(voices));
+    vi.stubGlobal("navigator", { onLine: false });
+    expect((await offline.mod.fetchVoices()).voices).toEqual(FALLBACK_VOICES);
+    expect(offline.fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("fetchVoices shares one request and honours the caller's abort", async () => {
+    let release: (r: Response) => void = () => undefined;
+    const { mod, fetchMock } = await load(() => new Promise<Response>((resolve) => (release = resolve)));
+    const controller = new AbortController();
+    const aborted = mod.fetchVoices(controller.signal);
+    const plain = mod.fetchVoices();
+    controller.abort();
+    expect(((await aborted.catch((e: unknown) => e)) as { name?: string }).name).toBe("AbortError");
+    release(json(voices));
+    expect((await plain).default).toBe("a1-helios");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

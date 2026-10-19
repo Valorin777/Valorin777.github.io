@@ -10,14 +10,17 @@ import {
   recordAnswer,
   resetProgress,
   reviewCard,
+  setDiagnostic,
+  setFinalTest,
   setOverride,
   setPosition,
   startDay,
+  touch,
   touchStreak,
   updateSettings,
 } from "@/lib/progress";
 import type { Grade } from "@/lib/srs";
-import type { AppState, Settings } from "@/types/state";
+import type { AppState, DiagnosticResult, FinalTestResult, Settings } from "@/types/state";
 
 /**
  * Local-first store. One versioned JSON document in localStorage, written on every change
@@ -65,6 +68,15 @@ export function getState(): AppState {
 
 function update(fn: (s: AppState) => AppState) {
   const next = fn(getState());
+  if (next === state) return;
+  state = touch(next, new Date().toISOString());
+  persist();
+  emit();
+}
+
+/** Replaces the whole state (cloud merge). Keeps the merged updatedAt. */
+export function replaceState(next: AppState) {
+  getState();
   if (next === state) return;
   state = next;
   persist();
@@ -151,6 +163,12 @@ export const actions = {
   },
   updateSettings(patch: Partial<Settings>) {
     update((s) => updateSettings(s, patch));
+  },
+  setDiagnostic(r: DiagnosticResult) {
+    update((s) => setDiagnostic(s, r));
+  },
+  setFinalTest(r: FinalTestResult) {
+    update((s) => touchStreak(setFinalTest(s, r), today()));
   },
   setOverride(day: number) {
     update((s) => setOverride(s, day));

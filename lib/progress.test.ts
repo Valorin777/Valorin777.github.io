@@ -7,6 +7,7 @@ import {
   DEFAULT_SETTINGS,
   dueCount,
   emptyDay,
+  EPOCH_ISO,
   getDayProgress,
   initialState,
   isDayUnlocked,
@@ -15,21 +16,41 @@ import {
   recordAnswer,
   resetProgress,
   reviewCard,
+  setDiagnostic,
+  setFinalTest,
   setOverride,
   setPosition,
   startDay,
   STORAGE_VERSION,
   topErrors,
   topicMastery,
+  touch,
   touchStreak,
   updateSettings,
 } from "@/lib/progress";
 import type { AnswerInput } from "@/lib/progress";
-import type { AppState } from "@/types/state";
+import type { AppState, DiagnosticResult, FinalTestResult } from "@/types/state";
 
 const T1 = "2026-10-19T09:00:00.000Z";
 const T2 = "2026-10-19T09:05:00.000Z";
 const D0 = "2026-10-19";
+
+const DIAG: DiagnosticResult = {
+  completedAt: T1,
+  level: "B1+",
+  byCategory: { "be-verb": { correct: 1, total: 2 }, perfect: { correct: 2, total: 2 } },
+  focus: ["be-verb", "perfect"],
+};
+
+const FINAL: FinalTestResult = {
+  completedAt: T2,
+  answers: { "p1-a:1": { given: "despite", correct: true }, "p2-a:1": { given: "", correct: false } },
+  part1: { correct: 1, total: 1 },
+  part2: { correct: 0, total: 1 },
+  byCategory: { linking: { correct: 1, total: 2 } },
+  percent: 50,
+  band: "Strong B1",
+};
 
 function wrong(extra: Partial<AnswerInput> = {}): AnswerInput {
   return {
@@ -51,9 +72,14 @@ describe("initial state and settings", () => {
   it("starts empty with default settings", () => {
     const s = initialState();
     expect(s.version).toBe(STORAGE_VERSION);
+    expect(s.updatedAt).toBe("1970-01-01T00:00:00.000Z");
+    expect(s.updatedAt).toBe(EPOCH_ISO);
+    expect(s.diagnostic).toBeNull();
+    expect(s.finalTest).toBeNull();
     expect(s.settings).toEqual({
       theme: "system",
       voiceURI: null,
+      neuralVoice: "oa-marin",
       rate: 0.95,
       sound: false,
       haptics: true,
@@ -72,6 +98,13 @@ describe("initial state and settings", () => {
     expect(s.settings).toEqual(DEFAULT_SETTINGS);
     expect(updateSettings(s, { rate: 0.1 }).settings.rate).toBe(0.6);
     expect(updateSettings(next, { rate: undefined }).settings.rate).toBe(1.2);
+  });
+
+  it("switches the neural voice off and on", () => {
+    const off = updateSettings(initialState(), { neuralVoice: null });
+    expect(off.settings.neuralVoice).toBeNull();
+    expect(updateSettings(off, { neuralVoice: "a1-orion" }).settings.neuralVoice).toBe("a1-orion");
+    expect(updateSettings(off, { neuralVoice: undefined }).settings.neuralVoice).toBeNull();
   });
 });
 
@@ -125,8 +158,92 @@ describe("migrate", () => {
     s = recordAnswer(s, wrong());
     s = completeStep(s, 1, "be:rule:0", "be:rule:1", T1);
     s = touchStreak(s, D0);
-    s = updateSettings(s, { voiceURI: "Samantha" });
-    expect(migrate(JSON.parse(JSON.stringify(s)))).toEqual(s);
+    s = updateSettings(s, { voiceURI: "Samantha", neuralVoice: null });
+    s = setDiagnostic(s, DIAG);
+    s = setFinalTest(s, FINAL);
+    s = touch(s, T2);
+    const back = migrate(JSON.parse(JSON.stringify(s)));
+    expect(back).toEqual(s);
+    expect(back.settings.neuralVoice).toBeNull();
+  });
+
+  it("upgrades a Phase 1 state that has none of the new fields", () => {
+    const phase1 = {
+      version: 1,
+      settings: { theme: "dark", voiceURI: "Daniel", rate: 1, sound: true, haptics: true, showRu: false },
+      position: { day: 1, stepId: "ex:be-1" },
+      days: { 1: { doneSteps: ["be:rule:0"], answers: { "be-1": { correct: true, attempts: 1, firstTry: true } }, seconds: 120, startedAt: T1 } },
+      cards: {},
+      errors: {},
+      streak: { current: 1, best: 1, lastDay: D0 },
+    };
+    const s = migrate(JSON.stringify(phase1));
+    expect(s.updatedAt).toBe(EPOCH_ISO);
+    expect(s.diagnostic).toBeNull();
+    expect(s.finalTest).toBeNull();
+    expect(s.settings).toEqual({ ...phase1.settings, neuralVoice: "oa-marin" });
+    expect(s.position).toEqual(phase1.position);
+    expect(s.days[1]).toEqual(phase1.days[1]);
+    expect(s.streak).toEqual(phase1.streak);
+  });
+
+  it("keeps an unknown neural voice id and repairs bad ones", () => {
+    expect(migrate({ settings: { neuralVoice: "a2-someone-new" } }).settings.neuralVoice).toBe("a2-someone-new");
+    expect(migrate({ settings: { neuralVoice: null } }).settings.neuralVoice).toBeNull();
+    expect(migrate({ settings: { neuralVoice: 5 } }).settings.neuralVoice).toBe("oa-marin");
+    expect(migrate({ settings: { neuralVoice: "  " } }).settings.neuralVoice).toBe("oa-marin");
+  });
+
+  it("keeps a valid updatedAt and replaces a missing one", () => {
+    expect(migrate({ updatedAt: T2 }).updatedAt).toBe(T2);
+    expect(migrate({ updatedAt: 5 }).updatedAt).toBe(EPOCH_ISO);
+  });
+
+  it("validates the diagnostic", () => {
+    expect(migrate({ diagnostic: DIAG }).diagnostic).toEqual(DIAG);
+    expect(migrate({ diagnostic: { level: "B2" } }).diagnostic).toBeNull();
+    expect(migrate({ diagnostic: "x" }).diagnostic).toBeNull();
+    const d = migrate({
+      diagnostic: {
+        completedAt: T1,
+        level: "C2",
+        byCategory: { "be-verb": { correct: 5, total: 2 }, space: { correct: 1, total: 1 }, perfect: 3 },
+        focus: ["perfect", "space", "perfect", 4, "be-verb"],
+      },
+    }).diagnostic;
+    expect(d).toEqual({
+      completedAt: T1,
+      level: null,
+      byCategory: { "be-verb": { correct: 2, total: 2 } },
+      focus: ["perfect", "be-verb"],
+    });
+  });
+
+  it("validates the final test", () => {
+    expect(migrate({ finalTest: FINAL }).finalTest).toEqual(FINAL);
+    expect(migrate({ finalTest: { percent: 80 } }).finalTest).toBeNull();
+    const f = migrate({
+      finalTest: {
+        completedAt: T2,
+        answers: { a: { given: 3, correct: true }, b: { given: "x" }, c: { given: "y", correct: false } },
+        part1: { correct: 3, total: 4 },
+        part2: "bad",
+        percent: 140,
+        band: "C1",
+      },
+    }).finalTest;
+    expect(f).toEqual({
+      completedAt: T2,
+      answers: { a: { given: "", correct: true }, c: { given: "y", correct: false } },
+      part1: { correct: 3, total: 4 },
+      part2: { correct: 0, total: 0 },
+      byCategory: {},
+      percent: 100,
+      band: "B2 ready",
+    });
+    const computed = migrate({ finalTest: { completedAt: T2, part1: { correct: 1, total: 2 }, part2: { correct: 0, total: 1 } } }).finalTest;
+    expect(computed?.percent).toBe(33);
+    expect(computed?.band).toBe("B1");
   });
 
   it("ignores prototype keys", () => {
@@ -148,6 +265,17 @@ describe("days and position", () => {
     s = setOverride(s, 3);
     expect(isDayUnlocked(s, 3)).toBe(true);
     expect(setOverride(s, 3)).toBe(s);
+  });
+
+  it("treats Day 7 (the test day) like any other day", () => {
+    let s = initialState();
+    expect(isDayUnlocked(s, 7)).toBe(false);
+    s = completeStep(s, 6, "done", null, T1);
+    expect(isDayUnlocked(s, 7)).toBe(true);
+    expect(isDayUnlocked(setOverride(initialState(), 7), 7)).toBe(true);
+    s = completeStep(s, 7, "done", null, T2);
+    expect(s.days[7].completedAt).toBe(T2);
+    expect(s.days[7].doneSteps).toEqual(["done"]);
   });
 
   it("sets startedAt once", () => {
@@ -286,12 +414,37 @@ describe("touchStreak", () => {
   });
 });
 
+describe("results and change stamp", () => {
+  it("stores the diagnostic and the final test without touching the input", () => {
+    const s0 = initialState();
+    const s1 = setDiagnostic(s0, DIAG);
+    expect(s1.diagnostic).toEqual(DIAG);
+    expect(s0.diagnostic).toBeNull();
+    const s2 = setFinalTest(s1, FINAL);
+    expect(s2.finalTest).toEqual(FINAL);
+    expect(s2.diagnostic).toEqual(DIAG);
+    expect(s1.finalTest).toBeNull();
+  });
+
+  it("touch sets updatedAt and keeps the object when nothing changes", () => {
+    const s0 = initialState();
+    const s1 = touch(s0, T1);
+    expect(s1.updatedAt).toBe(T1);
+    expect(s0.updatedAt).toBe(EPOCH_ISO);
+    expect(touch(s1, T1)).toBe(s1);
+    expect(touch(s1, T2).updatedAt).toBe(T2);
+  });
+});
+
 describe("reset, mastery and top errors", () => {
   it("resets everything but settings", () => {
     let s = updateSettings(initialState(), { theme: "dark" });
     s = recordAnswer(s, wrong());
     s = touchStreak(s, D0);
+    s = setDiagnostic(setFinalTest(s, FINAL), DIAG);
     const r = resetProgress(s);
+    expect(r.diagnostic).toBeNull();
+    expect(r.finalTest).toBeNull();
     expect(r).toEqual({ ...initialState(), settings: { ...DEFAULT_SETTINGS, theme: "dark" } });
   });
 

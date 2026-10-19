@@ -6,14 +6,28 @@
   "observability": { "enabled": true },
   "vars": {
     "ALLOWED_ORIGINS": "https://valorin777.github.io,http://localhost:3000,http://127.0.0.1:3000",
-    "MODEL": "anthropic/claude-haiku-5.5"
+    "MODEL": "anthropic/claude-haiku-5.5",
+    // Workers AI model used when OpenRouter fails (402 out of credits, 429, 5xx, timeout).
+    "AI_MODEL": "@cf/openai/gpt-oss-120b"
   },
-  // Workers Rate Limiting binding. period must be 10 or 60 seconds.
+  // Workers AI: voices (Deepgram Aura), speech-to-text (Whisper) and the fallback LLM.
+  // Always remote, also under `wrangler dev`, so local calls use the daily free allocation.
+  "ai": { "binding": "AI" },
+  // One namespace with key prefixes "tts:" (audio, kept forever), "tr:" (translations),
+  // "ex:" (explanations). The Cache API stores nothing on *.workers.dev, KV does.
+  "kv_namespaces": [{ "binding": "TTS_CACHE", "id": "fdb9329e6d62476291535457c7be6b21" }],
+  // Workers Rate Limiting bindings. period must be 10 or 60 seconds.
   "ratelimits": [
     {
       "name": "LIMITER",
       "namespace_id": "2601",
       "simple": { "limit": 30, "period": 60 }
+    },
+    {
+      // /tts and /stt: one lesson plays many short clips.
+      "name": "TTS_LIMITER",
+      "namespace_id": "2602",
+      "simple": { "limit": 120, "period": 60 }
     }
   ]
   // Secret, never in this file: npx wrangler secret put OPENROUTER_API_KEY

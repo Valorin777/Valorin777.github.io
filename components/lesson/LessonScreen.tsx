@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { motion } from "motion/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { SpeechProvider, useSpeech } from "@/components/speech/SpeechProvider";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useSpeech } from "@/components/speech/SpeechProvider";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { CloseIcon, LockIcon } from "@/components/ui/Icons";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { findTopic, getDay, listDays } from "@/content";
+import { FinalScreen } from "@/components/final/FinalScreen";
+import { findTopic, getDay, getFinal, listDays } from "@/content";
 import type { Day } from "@/lib/content/schema";
 import { getDayProgress, isDayUnlocked } from "@/lib/progress";
 import {
@@ -33,10 +34,11 @@ export function LessonScreen({ dayNumber }: { dayNumber: number }) {
   const state = useAppState();
   const meta = listDays().find((m) => m.number === dayNumber);
   const day = getDay(dayNumber);
+  const final = dayNumber === 7 ? getFinal() : null;
 
   if (!hydrated) return <LessonSkeleton />;
 
-  if (!meta || !day) {
+  if (!meta || (!day && !final)) {
     return (
       <CalmMessage
         title={meta ? `Day ${dayNumber} arrives in the next update.` : "This day doesn't exist."}
@@ -70,11 +72,9 @@ export function LessonScreen({ dayNumber }: { dayNumber: number }) {
     );
   }
 
-  return (
-    <SpeechProvider>
-      <LessonPlayer day={day} />
-    </SpeechProvider>
-  );
+  if (final) return <FinalScreen day={final} />;
+  if (!day) return null;
+  return <LessonPlayer day={day} />;
 }
 
 function initialIndex(day: Day, steps: Step[]): number {
@@ -140,7 +140,7 @@ function LessonPlayer({ day }: { day: Day }) {
   const left = remainingSeconds(steps, progress.doneSteps);
   const topic = "topicId" in step ? findTopic(day, step.topicId) : undefined;
 
-  let content: React.ReactNode = null;
+  let content: ReactNode = null;
   switch (step.kind) {
     case "rule":
       if (topic) content = <RuleStepView topic={topic} card={topic.rules[step.cardIndex]} stepId={step.id} onNext={next} onBack={back} />;
@@ -227,10 +227,10 @@ function CalmMessage({
   text,
   action,
 }: {
-  icon?: React.ReactNode;
+  icon?: ReactNode;
   title: string;
   text: string;
-  action: React.ReactNode;
+  action: ReactNode;
 }) {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center px-5 pt-safe pb-safe">

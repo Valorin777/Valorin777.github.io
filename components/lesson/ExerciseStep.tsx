@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { ChoiceView } from "@/components/exercises/ChoiceView";
 import { ErrorTapView } from "@/components/exercises/ErrorTapView";
 import { FillView } from "@/components/exercises/FillView";
@@ -34,12 +34,18 @@ export function ExerciseStep({
   ex,
   stepId,
   onNext,
+  onResult,
+  eyebrow,
 }: {
   day: number;
   topic: Topic;
   ex: Exercise;
   stepId: string;
   onNext: () => void;
+  /** Called once with the result (drills count their score with it). */
+  onResult?: (correct: boolean) => void;
+  /** Overrides the topic title above the instruction. */
+  eyebrow?: string;
 }) {
   const settings = useAppState().settings;
   const [status, setStatus] = useState<ExerciseStatus>("answering");
@@ -79,6 +85,7 @@ export function ExerciseStep({
       right: r.answer,
       rule: ex.rule,
     });
+    onResult?.(a.correct);
     if (settings.sound) playCue(a.correct ? "correct" : "close");
     if (settings.haptics) buzz(a.correct ? "correct" : "close");
     // Auto-advance after a right answer: a short beat to see it, longer if there was a typo.
@@ -94,7 +101,7 @@ export function ExerciseStep({
   });
 
   const props = { status, onAnswer, registerSubmit };
-  let view: React.ReactNode;
+  let view: ReactNode;
   switch (ex.type) {
     case "choice":
     case "collocation":
@@ -129,7 +136,7 @@ export function ExerciseStep({
 
   return (
     <StepFrame
-      eyebrow={topic.title}
+      eyebrow={eyebrow ?? topic.title}
       title={INSTRUCTIONS[ex.type]}
       action={action}
       hints={

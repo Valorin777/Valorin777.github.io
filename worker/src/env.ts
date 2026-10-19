@@ -14,6 +14,18 @@ export interface CacheLike {
   put(request: Request, response: Response): Promise<void>;
 }
 
+/** The Workers AI binding (`"ai": { "binding": "AI" }`). Throws on any model or quota error. */
+export interface AiBinding {
+  run(model: string, input: unknown, options?: unknown): Promise<unknown>;
+}
+
+/** The subset of a KV namespace the worker needs (audio, translations, explanations). */
+export interface KvLike {
+  get(key: string, type: "text"): Promise<string | null>;
+  get(key: string, type: "arrayBuffer"): Promise<ArrayBuffer | null>;
+  put(key: string, value: string | ArrayBuffer, options?: { expirationTtl?: number }): Promise<void>;
+}
+
 export interface Env {
   /** Secret: `npx wrangler secret put OPENROUTER_API_KEY`. Never logged, never returned. */
   OPENROUTER_API_KEY?: string;
@@ -21,7 +33,14 @@ export interface Env {
   ALLOWED_ORIGINS?: string;
   /** OpenRouter model id, e.g. "anthropic/claude-haiku-5.5". */
   MODEL?: string;
+  /** Workers AI text model used when OpenRouter fails; defaults to WORKERS_AI_LLM. */
+  AI_MODEL?: string;
   LIMITER?: RateLimiter;
+  /** Separate, larger budget for /tts and /stt: one lesson plays many short clips. */
+  TTS_LIMITER?: RateLimiter;
+  AI?: AiBinding;
+  /** KV namespace, keys "tts:" (audio), "tr:" (translations), "ex:" (explanations). */
+  TTS_CACHE?: KvLike;
 }
 
 export interface FetchInit {
@@ -41,6 +60,8 @@ export interface Deps {
   waitUntil: (promise: Promise<unknown>) => void;
   /** Upstream timeout; defaults to 15 s. */
   upstreamTimeoutMs?: number;
+  /** Workers AI timeout per call; defaults to 20 s. */
+  aiTimeoutMs?: number;
 }
 
 export const DEFAULT_MODEL = "anthropic/claude-haiku-5.5";

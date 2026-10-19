@@ -65,11 +65,19 @@ async function main() {
 
   try {
     await page.goto(url + "/", { waitUntil: "networkidle" });
-    const start = page.getByRole("link", { name: /Start Day 1/ }).first();
+    const start = page.getByRole("link", { name: /^Start/ }).first();
     await start.waitFor({ timeout: 5000 });
-    ok(await start.isVisible(), "home shows Start Day 1");
+    ok(await start.isVisible(), "home shows Start");
     await start.click();
+    await page.waitForURL(/\/check\/$/);
+    // The quick check: answer the first two, then skip the rest.
+    await page.keyboard.press("1");
+    await page.waitForTimeout(450);
+    await page.keyboard.press("2");
+    await page.waitForTimeout(450);
+    await page.getByRole("button", { name: "Skip" }).click();
     await page.waitForURL(/\/day\/1\/$/);
+    ok(true, "quick check can be skipped into Day 1");
 
     let mistakeMade = false;
     for (let i = 0; i < steps.length; i++) {
@@ -145,9 +153,10 @@ async function main() {
     ok(Object.keys(state.cards ?? {}).filter((k: string) => k.startsWith("p:")).length === day.phrases.length, "all phrases became flashcards");
     ok(state.streak?.current === 1, "streak started");
 
-    await page.getByRole("link", { name: /Back home/ }).click();
-    await page.waitForURL(/\/b2\/$/);
-    await page.getByText("Day 1 is done.").waitFor();
+    const nextDay = page.getByRole("link", { name: /Start Day 2/ });
+    ok(await nextDay.isVisible(), "the done screen offers Day 2");
+    await page.goto(url + "/", { waitUntil: "networkidle" });
+    await page.getByText(/Day 1 is done\.|Day 2 is ready\./).first().waitFor();
     ok(true, "home shows the finished day");
 
     ok(errors.length === 0, `no console errors (${errors.join(" | ")})`);

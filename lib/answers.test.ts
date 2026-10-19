@@ -316,3 +316,18 @@ describe("readableExercise", () => {
     expect(r.prompt).not.toBe(reorder.words.join(" / "));
   });
 });
+
+describe("grammar is never a typo", () => {
+  const fill = (answers: string[]) =>
+    ({ id: "x", type: "fill", before: "", after: "", answers, rule: "r", explain: "e" }) as Parameters<typeof checkFill>[1];
+  it("rejects one-letter grammar changes", () => {
+    expect(checkFill("rised", fill(["risen"])).correct).toBe(false);
+    expect(checkFill("would come", fill(["could come"])).correct).toBe(false);
+    expect(checkFill("then", fill(["than"])).correct).toBe(false);
+    expect(checkFill("startd", fill(["started"])).correct).toBe(true);
+  });
+  it("does not forgive an extra will in speech", () => {
+    expect(checkSpoken(["I'll call you as soon as I will arrive"], ["I'll call you as soon as I arrive."]).correct).toBe(false);
+    expect(checkSpoken(["I'll call you as soon as I arrive"], ["I'll call you as soon as I arrive."]).correct).toBe(true);
+  });
+});

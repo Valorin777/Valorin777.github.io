@@ -4,16 +4,17 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && node scripts/build-sw.mjs",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "content:check": "tsx scripts/check-content.ts",
+    "content:check": "tsx scripts/check-content.ts && tsx scripts/validate-final.ts",
     "check": "npm run lint && npm run typecheck && npm run test && npm run content:check",
     "shots": "tsx scripts/screenshots.ts",
     "deploy": "node scripts/deploy-pages.mjs"
   },
   "dependencies": {
+    "firebase": "^12.19.0",
     "motion": "^14.4.0",
     "next": "16.4.2",
     "react": "19.3.0",

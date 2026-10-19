@@ -78,15 +78,23 @@ export const AI_LIMITS = {
   scenario: 60,
   focusItems: 6,
   focusItem: 40,
+  translateText: 600,
+  ttsText: 300,
 } as const;
 
 export const EXPLAIN_TIMEOUT_MS = 12_000;
 export const COACH_TIMEOUT_MS = 20_000;
+export const TRANSLATE_TIMEOUT_MS = 15_000;
+export const VOICES_TIMEOUT_MS = 8_000;
 export const CACHE_PREFIX = "b2sprint:ai:";
 export const CACHE_MAX_ENTRIES = 200;
+export const TRANSLATE_CACHE_PREFIX = "b2sprint:tr:";
+export const TRANSLATE_CACHE_MAX_ENTRIES = 300;
+export const VOICES_KEY = "b2sprint:voices";
+export const VOICES_TTL_MS = 24 * 60 * 60 * 1000;
 export const DEVICE_KEY = "b2sprint:device";
 
-export type AiPath = "/explain" | "/coach" | "/health";
+export type AiPath = "/explain" | "/coach" | "/health" | "/translate" | "/voices" | "/tts" | "/stt";
 
 export function buildUrl(base: string, path: AiPath): string {
   return `${trimBaseUrl(base)}${path}`;
@@ -252,17 +260,29 @@ export function writeCachedExplain(
   nowMs: number,
   max: number = CACHE_MAX_ENTRIES,
 ): void {
+  writeCachedText(storage, CACHE_PREFIX, key, text, nowMs, max);
+}
+
+/** LRU write shared by the explanation and translation caches; eviction counts only `prefix` keys. */
+function writeCachedText(
+  storage: StorageLike,
+  prefix: string,
+  key: string,
+  text: string,
+  nowMs: number,
+  max: number,
+): void {
   try {
     storage.setItem(key, JSON.stringify({ t: nowMs, text } satisfies CacheEntry));
     const entries: Array<{ key: string; t: number }> = [];
     for (let i = 0; i < storage.length; i++) {
       const k = storage.key(i);
-      if (k === null || !k.startsWith(CACHE_PREFIX)) continue;
+      if (k === null || !k.startsWith(prefix)) continue;
       entries.push({ key: k, t: parseEntry(storage.getItem(k))?.t ?? 0 });
     }
     for (const stale of selectEvictions(entries, max)) storage.removeItem(stale);
   } catch {
-    // Storage full or blocked: the explanation still reaches the learner, just uncached.
+    // Storage full or blocked: the answer still reaches the learner, just uncached.
   }
 }
 
@@ -322,35 +342,85 @@ export function deviceId(): string {
 
 // ---------- transport ----------
 
-function abortReason(signal: AbortSignal): unknown {
+export function abortReason(signal: AbortSignal): unknown {
   return signal.reason ?? new DOMException("The operation was aborted.", "AbortError");
 }
 
+/** Lets one caller stop waiting for a shared promise without cancelling it for the others. */
+export function withAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(abortReason(signal));
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = (): void => reject(abortReason(signal));
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
+export interface AiRequestInit {
+  method?: "GET" | "POST";
+  /** POST body sent as JSON (ignored when `body` is set). */
+  json?: unknown;
+  /** Raw POST body (audio upload), sent with `contentType`. */
+  body?: Blob;
+  contentType?: string;
+  query?: Record<string, string>;
+  timeoutMs: number;
+  signal?: AbortSignal;
+}
+
 /**
- * POST JSON to the worker. Rejects with AiError, except when the caller's own signal aborts:
- * then the abort reason is rethrown untouched so the UI can ignore it.
+ * One request to the worker; `read` parses the OK response inside the same timeout. Rejects with
+ * AiError, except when the caller's own signal aborts: then the abort reason is rethrown untouched
+ * so the UI can ignore it. GETs carry no custom headers, so they need no CORS preflight.
  */
-async function postJson(path: AiPath, body: unknown, timeoutMs: number, signal?: AbortSignal): Promise<unknown> {
+export async function aiRequest<T>(
+  path: AiPath,
+  init: AiRequestInit,
+  read: (response: Response) => Promise<T>,
+): Promise<T> {
+  const { signal } = init;
   if (signal?.aborted) throw abortReason(signal);
   const controller = new AbortController();
   let timedOut = false;
   const timer = setTimeout(() => {
     timedOut = true;
     controller.abort();
-  }, timeoutMs);
+  }, init.timeoutMs);
   const onAbort = () => controller.abort();
   signal?.addEventListener("abort", onAbort, { once: true });
+  const method = init.method ?? "POST";
+  const query = init.query ? `?${new URLSearchParams(init.query).toString()}` : "";
+  let headers: Record<string, string> | undefined;
+  let body: BodyInit | undefined;
+  if (method === "POST") {
+    if (init.body !== undefined) {
+      headers = { "Content-Type": init.contentType ?? init.body.type, "X-Device-Id": deviceId() };
+      body = init.body;
+    } else {
+      headers = { "Content-Type": "application/json", "X-Device-Id": deviceId() };
+      body = JSON.stringify(init.json ?? {});
+    }
+  }
   try {
-    const response = await fetch(buildUrl(AI_URL, path), {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Device-Id": deviceId() },
-      body: JSON.stringify(body),
+    const response = await fetch(`${buildUrl(AI_URL, path)}${query}`, {
+      method,
+      headers,
+      body,
       signal: controller.signal,
       credentials: "omit",
       cache: "no-store",
     });
     if (!response.ok) throw new AiError(errorKindForStatus(response.status), `AI request failed (${response.status})`);
-    return (await response.json()) as unknown;
+    return await read(response);
   } catch (error) {
     if (error instanceof AiError) throw error;
     if (signal?.aborted && !timedOut) throw abortReason(signal);
@@ -358,6 +428,165 @@ async function postJson(path: AiPath, body: unknown, timeoutMs: number, signal?:
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener("abort", onAbort);
+  }
+}
+
+function postJson(path: AiPath, body: unknown, timeoutMs: number, signal?: AbortSignal): Promise<unknown> {
+  return aiRequest(path, { json: body, timeoutMs, signal }, (response) => response.json() as Promise<unknown>);
+}
+
+// ---------- translation ----------
+
+export type TranslateTarget = "ru" | "en" | "auto";
+
+export interface TranslateInput {
+  text: string;
+  to: TranslateTarget;
+}
+
+export interface TranslateNote {
+  phrase: string;
+  meaning: string;
+}
+
+export interface TranslateResult {
+  translation: string;
+  from: "en" | "ru";
+  notes: TranslateNote[];
+}
+
+/** Case and final punctuation stay: "Really?" and "really." can translate differently. */
+export function normalizeTranslateText(text: string): string {
+  return (text || "")
+    .normalize("NFKC")
+    .replace(/[’‘`´]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function detectLang(text: string): "en" | "ru" {
+  return /[а-яё]/i.test(text) ? "ru" : "en";
+}
+
+export function translateCacheKey(input: TranslateInput): string {
+  return TRANSLATE_CACHE_PREFIX + smallHash(`${input.to}|${normalizeTranslateText(input.text)}`);
+}
+
+export function parseTranslateResponse(data: unknown, sourceText = ""): TranslateResult | null {
+  if (!isRecord(data) || typeof data.translation !== "string" || data.translation.trim() === "") return null;
+  const from = data.from === "en" || data.from === "ru" ? data.from : detectLang(sourceText);
+  const notes: TranslateNote[] = [];
+  if (Array.isArray(data.notes)) {
+    for (const note of data.notes) {
+      if (!isRecord(note) || typeof note.phrase !== "string" || typeof note.meaning !== "string") continue;
+      if (!note.phrase.trim() || !note.meaning.trim()) continue;
+      notes.push({ phrase: note.phrase, meaning: note.meaning });
+    }
+  }
+  return { translation: data.translation, from, notes: notes.slice(0, 8) };
+}
+
+function readCachedTranslation(storage: StorageLike, key: string, source: string): TranslateResult | null {
+  const raw = readCachedExplain(storage, key, Date.now());
+  if (raw === null) return null;
+  try {
+    return parseTranslateResponse(JSON.parse(raw) as unknown, source);
+  } catch {
+    return null;
+  }
+}
+
+// ---------- natural voices ----------
+
+export interface VoiceInfo {
+  id: string;
+  label: string;
+  accent: string;
+  gender: "female" | "male";
+}
+
+export interface VoiceList {
+  voices: VoiceInfo[];
+  default: string;
+}
+
+/** Used before the worker answers, offline, or when it is down. Ids match the worker's catalogue. */
+export const FALLBACK_VOICES: VoiceInfo[] = [
+  { id: "a1-asteria", label: "Asteria · US", accent: "US", gender: "female" },
+  { id: "a1-luna", label: "Luna · US", accent: "US", gender: "female" },
+  { id: "a1-athena", label: "Athena · UK", accent: "UK", gender: "female" },
+  { id: "a1-helios", label: "Helios · UK", accent: "UK", gender: "male" },
+  { id: "a1-orion", label: "Orion · US", accent: "US", gender: "male" },
+  { id: "a1-arcas", label: "Arcas · US", accent: "US", gender: "male" },
+];
+
+export const FALLBACK_VOICE_LIST: VoiceList = { voices: FALLBACK_VOICES, default: "a1-asteria" };
+
+export function isVoiceId(value: string): boolean {
+  return /^[a-z0-9][a-z0-9_.-]{0,63}$/i.test(value);
+}
+
+export function parseVoicesResponse(data: unknown): VoiceList | null {
+  if (!isRecord(data) || !Array.isArray(data.voices)) return null;
+  const voices: VoiceInfo[] = [];
+  for (const item of data.voices) {
+    if (!isRecord(item) || typeof item.id !== "string" || !isVoiceId(item.id)) continue;
+    if (item.gender !== "female" && item.gender !== "male") continue;
+    if (voices.some((voice) => voice.id === item.id)) continue;
+    const label = typeof item.label === "string" && item.label.trim() ? item.label.trim() : item.id;
+    const accent = typeof item.accent === "string" ? item.accent : "";
+    voices.push({ id: item.id, label, accent, gender: item.gender });
+  }
+  const first = voices[0];
+  if (!first) return null;
+  const fallbackDefault = first.id;
+  const preferred = typeof data.default === "string" ? data.default : "";
+  return { voices, default: voices.some((voice) => voice.id === preferred) ? preferred : fallbackDefault };
+}
+
+interface StoredVoices {
+  t: number;
+  list: VoiceList;
+}
+
+let voicesMemo: StoredVoices | null = null;
+let voicesInFlight: Promise<VoiceList> | null = null;
+
+function readStoredVoices(storage: StorageLike | null): StoredVoices | null {
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(VOICES_KEY);
+    if (raw === null) return null;
+    const value = JSON.parse(raw) as unknown;
+    if (!isRecord(value) || typeof value.t !== "number") return null;
+    const list = parseVoicesResponse(value);
+    return list ? { t: value.t, list } : null;
+  } catch {
+    return null;
+  }
+}
+
+function storeVoices(storage: StorageLike | null, entry: StoredVoices): void {
+  voicesMemo = entry;
+  try {
+    storage?.setItem(VOICES_KEY, JSON.stringify({ t: entry.t, ...entry.list }));
+  } catch {
+    // Kept in memory for this page session.
+  }
+}
+
+async function loadVoiceList(storage: StorageLike | null, known: StoredVoices | null): Promise<VoiceList> {
+  try {
+    const data = await aiRequest("/voices", { method: "GET", timeoutMs: VOICES_TIMEOUT_MS }, (response) =>
+      response.json() as Promise<unknown>,
+    );
+    const list = parseVoicesResponse(data);
+    if (!list) return known?.list ?? FALLBACK_VOICE_LIST;
+    storeVoices(storage, { t: Date.now(), list });
+    return list;
+  } catch {
+    return known?.list ?? FALLBACK_VOICE_LIST;
   }
 }
 
@@ -386,4 +615,48 @@ export async function coach(input: CoachInput, signal?: AbortSignal): Promise<Co
   const reply = parseCoachResponse(data);
   if (!reply) throw new AiError("unavailable", "Unexpected AI response");
   return reply;
+}
+
+/**
+ * Translation with short notes on idioms and collocations. `to: "auto"` lets the worker pick
+ * (Russian → English, English → Russian). Served from localStorage when seen before.
+ */
+export async function translate(input: TranslateInput, signal?: AbortSignal): Promise<TranslateResult> {
+  if (!aiEnabled()) throw new AiError("disabled");
+  const text = cut(normalizeTranslateText(input.text), AI_LIMITS.translateText);
+  if (!text) throw new AiError("unavailable", "Nothing to translate");
+  const key = translateCacheKey({ text, to: input.to });
+  const storage = browserStorage();
+  const hit = storage ? readCachedTranslation(storage, key, text) : null;
+  if (hit) return hit;
+  if (isOffline(currentNavigator())) throw new AiError("offline");
+  const data = await postJson("/translate", { text, to: input.to }, TRANSLATE_TIMEOUT_MS, signal);
+  const result = parseTranslateResponse(data, text);
+  if (!result) throw new AiError("unavailable", "Unexpected AI response");
+  if (storage) {
+    writeCachedText(storage, TRANSLATE_CACHE_PREFIX, key, JSON.stringify(result), Date.now(), TRANSLATE_CACHE_MAX_ENTRIES);
+  }
+  return result;
+}
+
+/**
+ * The worker's natural voices, cached for a day (memory + localStorage). Never fails for network
+ * reasons: offline or with the worker down it returns the last list seen, else FALLBACK_VOICES.
+ * Rejects only when AI is off (AiError "disabled") or the caller aborts.
+ */
+export async function fetchVoices(signal?: AbortSignal): Promise<VoiceList> {
+  if (!aiEnabled()) throw new AiError("disabled");
+  if (signal?.aborted) throw abortReason(signal);
+  const storage = browserStorage();
+  const known = voicesMemo ?? readStoredVoices(storage);
+  if (known) voicesMemo = known;
+  const now = Date.now();
+  if (known && known.t <= now && now - known.t < VOICES_TTL_MS) return known.list;
+  if (isOffline(currentNavigator())) return known?.list ?? FALLBACK_VOICE_LIST;
+  if (!voicesInFlight) {
+    voicesInFlight = loadVoiceList(storage, known).finally(() => {
+      voicesInFlight = null;
+    });
+  }
+  return signal ? withAbort(voicesInFlight, signal) : voicesInFlight;
 }

@@ -11,8 +11,10 @@ import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeF
 import { createServer } from "node:http";
 import { extname, join } from "node:path";
 import { chromium, type Page } from "playwright";
-import { getDay } from "../content/index";
-import { initialState, recordAnswer, completeStep, addPhraseCards } from "../lib/progress";
+import { getDay, getDiagnostic, getFinal } from "../content/index";
+import { initialState, recordAnswer, completeStep, addPhraseCards, setDiagnostic, setFinalTest } from "../lib/progress";
+import { scoreDiagnostic } from "../lib/diagnostic";
+import { gapKey, scoreFinalTest } from "../lib/finalTest";
 import { readableExercise } from "../lib/answers";
 import { buildSteps, type Step } from "../lib/steps";
 import type { AppState } from "../types/state";
@@ -120,13 +122,43 @@ interface Shot {
   act?: (page: Page) => Promise<void>;
 }
 
+function reviewStateFor(): AppState {
+  return reviewState;
+}
 const reviewState = (() => {
   let s = stateAt(idx((st) => st.kind === "review"), { mistakes: 1 });
   s = addPhraseCards(s, 1, day.phrases, TODAY, NOW);
   return s;
 })();
 
+const final = getFinal()!;
+function finalState(stepId: string, withResult = false): AppState {
+  let s = stateAt(steps.length - 1, { answerAll: true, mistakes: 1 });
+  for (const n of [1, 2, 3, 4, 5, 6]) s = { ...s, days: { ...s.days, [n]: { ...(s.days[n] ?? { doneSteps: [], answers: {}, seconds: 0 }), completedAt: NOW } } };
+  s = { ...s, position: { day: 7, stepId } };
+  if (withResult) {
+    const answers: Record<string, string | number> = {};
+    final.part1.forEach((t) => t.gaps.forEach((g, i) => (answers[gapKey(t.id, i + 1)] = i % 3 === 0 ? (g.answer + 1) % 4 : g.answer)));
+    final.part2.forEach((t) => t.gaps.forEach((g, i) => (answers[gapKey(t.id, i + 1)] = i % 4 === 0 ? "xx" : g.answers[0])));
+    s = setFinalTest(s, scoreFinalTest(final, answers, NOW));
+    s = { ...s, days: { ...s.days, 7: { doneSteps: ["done", "report"], answers: {}, seconds: 1500, completedAt: NOW } } };
+  }
+  return s;
+}
+const diag = getDiagnostic();
+const diagState = setDiagnostic(stateAt(0), scoreDiagnostic(diag, Object.fromEntries(diag.map((d, i) => [d.id, i % 3 === 0 ? (d.answer + 1) % d.options.length : d.answer])), NOW));
+
 const SCREENS: Shot[] = [
+  { name: "check", path: "/check/", state: null },
+  { name: "check-result", path: "/check/", state: diagState },
+  { name: "mistakes-page", path: "/mistakes/", state: reviewStateFor() },
+  { name: "drill", path: "/drill/", state: reviewStateFor() },
+  { name: "translate", path: "/translate/", state: stateAt(3) },
+  { name: "final-intro", path: "/day/7/", state: finalState("intro") },
+  { name: "final-p1", path: "/day/7/", state: finalState(`p1:${final.part1[0].id}`), act: async (p) => { await p.keyboard.press("2"); await p.keyboard.press("3"); } },
+  { name: "final-p2", path: "/day/7/", state: finalState(`p2:${final.part2[0].id}`) },
+  { name: "final-report", path: "/day/7/", state: finalState("report", true) },
+  { name: "day2-rule", path: "/day/2/", state: (() => { const s = finalState("intro"); return { ...s, position: { day: 2, stepId: "zero-first:rule:0" } }; })() },
   { name: "home-first", path: "/", state: null },
   { name: "home-progress", path: "/", state: stateAt(Math.floor(steps.length * 0.35), { mistakes: 1 }) },
   { name: "rule", path: "/day/1/", state: stateAt(0), act: async (p) => { await p.keyboard.press("Enter"); await p.keyboard.press("Enter"); } },

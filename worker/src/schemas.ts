@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { oneLine } from "./prompts";
+import { VOICE_IDS } from "./voices";
 
 export const LIMITS = {
   exerciseId: 80,
@@ -13,6 +15,9 @@ export const LIMITS = {
   focusItems: 6,
   focusItem: 40,
   bodyBytes: 8 * 1024,
+  ttsText: 300,
+  translateText: 600,
+  noteItems: 3,
 } as const;
 
 export const LangSchema = z.enum(["en", "ru"]);
@@ -75,3 +80,73 @@ export const CoachResponseSchema = z.strictObject({
   ended: z.boolean(),
 });
 export type CoachResponse = z.infer<typeof CoachResponseSchema>;
+
+/** Speech is one line: whitespace and control characters collapse before the length check. */
+export const TtsBodySchema = z.strictObject({
+  text: z
+    .string()
+    .max(LIMITS.ttsText * 4)
+    .transform((text) => oneLine(text.normalize("NFKC")))
+    .pipe(z.string().min(1).max(LIMITS.ttsText)),
+  voice: z.enum(VOICE_IDS),
+});
+export type TtsBody = z.infer<typeof TtsBodySchema>;
+
+/** Keeps line breaks (a short dialogue stays readable) but nothing else unusual. */
+export function normalizeSourceText(text: string): string {
+  let out = "";
+  for (const ch of text.normalize("NFKC").replace(/\r\n?/g, "\n")) {
+    const code = ch.charCodeAt(0);
+    out += ch === "\n" || (code >= 32 && code !== 127) ? ch : " ";
+  }
+  return out
+    .split("\n")
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+export const TranslateTargetSchema = z.enum(["ru", "en", "auto"]);
+export type TranslateTarget = z.infer<typeof TranslateTargetSchema>;
+
+export const TranslateBodySchema = z.strictObject({
+  text: z
+    .string()
+    .max(LIMITS.translateText * 4)
+    .transform(normalizeSourceText)
+    .pipe(z.string().min(1).max(LIMITS.translateText)),
+  to: TranslateTargetSchema,
+});
+export type TranslateBody = z.infer<typeof TranslateBodySchema>;
+
+/** A note as the model returns it; anything that does not fit is dropped. */
+export const TranslateNoteSchema = z.object({
+  phrase: z.string().trim().min(1).max(80),
+  meaning: z.string().trim().min(1).max(200),
+});
+export type TranslateNote = z.infer<typeof TranslateNoteSchema>;
+
+export const TranslateResponseSchema = z.strictObject({
+  translation: z.string().min(1),
+  from: LangSchema,
+  notes: z.array(z.strictObject({ phrase: z.string().min(1), meaning: z.string().min(1) })).max(LIMITS.noteItems),
+});
+export type TranslateResponse = z.infer<typeof TranslateResponseSchema>;
+
+export const VoicesResponseSchema = z.strictObject({
+  voices: z
+    .array(
+      z.strictObject({
+        id: z.enum(VOICE_IDS),
+        label: z.string().min(1),
+        accent: z.enum(["US", "UK", "AU", "IE"]),
+        gender: z.enum(["female", "male"]),
+        model: z.string().min(1),
+      }),
+    )
+    .min(1),
+  default: z.enum(VOICE_IDS),
+});
+
+export const SttResponseSchema = z.strictObject({ text: z.string() });

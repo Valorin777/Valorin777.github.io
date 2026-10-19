@@ -1,4 +1,5 @@
-import type { CacheLike } from "./env";
+import type { CacheLike, KvLike } from "./env";
+import { KV_PREFIX, kvGetJson, kvPut } from "./kv";
 import type { Lang } from "./schemas";
 
 export const EXPLAIN_TTL_SECONDS = 30 * 24 * 60 * 60;
@@ -62,4 +63,32 @@ export async function writeExplainCache(cache: CacheLike | null, key: Request, t
   } catch {
     // Ignored on purpose; see readExplainCache.
   }
+}
+
+/** KV key for an explanation; the Cache API above stores nothing on *.workers.dev, KV does. */
+export function explainKvKey(hash: string): string {
+  return `${KV_PREFIX.explain}${hash}`;
+}
+
+export interface CachedExplanation {
+  text: string;
+  /** Which model wrote it; null for entries without one. */
+  model: string | null;
+}
+
+export async function readExplainKv(kv: KvLike | undefined, key: string): Promise<CachedExplanation | null> {
+  const data = await kvGetJson(kv, key);
+  if (data === null || typeof data !== "object") return null;
+  const { text, model } = data as { text?: unknown; model?: unknown };
+  if (typeof text !== "string" || text.length === 0) return null;
+  return { text, model: typeof model === "string" ? model : null };
+}
+
+export function writeExplainKv(
+  kv: KvLike | undefined,
+  key: string,
+  value: CachedExplanation,
+  ttlSeconds: number,
+): Promise<void> {
+  return kvPut(kv, key, JSON.stringify(value), ttlSeconds);
 }

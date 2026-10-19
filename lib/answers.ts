@@ -158,7 +158,29 @@ const VOWELS = "aeiou";
  * work/works, live/lived, take/taken, advice/advices (an added final s/d/n), know/knew,
  * begin/began, forget/forgot, than/then (a vowel swap in a short word), advice/advise (c/s).
  */
+/** One-letter-apart word pairs that are different words, never typos of each other. */
+const CONFUSABLE = new Set(
+  [
+    ["would", "could"],
+    ["then", "than"],
+    ["lose", "loose"],
+    ["rise", "raise"],
+    ["rose", "raised"],
+    ["were", "where"],
+    ["its", "it's"],
+    ["to", "too"],
+    ["of", "off"],
+    ["live", "life"],
+    ["advise", "advice"],
+  ].flatMap(([a, b]) => [`${a}|${b}`, `${b}|${a}`]),
+);
+
 function isGrammarEdit(given: string, expected: string): boolean {
+  if (CONFUSABLE.has(`${given}|${expected}`)) return true;
+  // Different endings are different forms (rised/risen, take/taken, works/worked), not typos.
+  if (given.length === expected.length && given.slice(0, -1) === expected.slice(0, -1) && "sdnty".includes(given.at(-1) ?? "") && "sdnty".includes(expected.at(-1) ?? "")) {
+    return true;
+  }
   if (given.length !== expected.length) {
     const [short, long] = given.length < expected.length ? [given, expected] : [expected, given];
     return long.startsWith(short) && "sdn".includes(long[long.length - 1]);
@@ -244,7 +266,10 @@ export function checkReorder(order: string[], ex: ReorderExercise): boolean {
 }
 
 export function reorderSentence(words: string[], end: "." | "?" | "!" = "."): string {
-  const text = words.filter((w) => w.length > 0).join(" ");
+  const text = words
+    .filter((w) => w.length > 0)
+    .join(" ")
+    .replace(/\s+('(?:m|s|re|ve|ll|d)\b|n't\b)/gi, "$1");
   if (text === "") return "";
   return text.charAt(0).toUpperCase() + text.slice(1) + end;
 }
@@ -318,7 +343,8 @@ const NUMBER_WORDS = [
 const FILLERS = new Set(["um", "umm", "uh", "uhm", "er", "erm", "ah", "eh", "hmm", "mm"]);
 const STOP_WORDS = new Set(["a", "an", "the", "to", "of", "and", "in", "on", "at", "for"]);
 /** Saying one of these when the answer has none changes the grammar ("is started") or the meaning. */
-const CRITICAL_WORDS = ["am", "is", "are", "was", "were", "be", "been", "being", "not"];
+/** An extra one of these changes the grammar (is started, if it will rain): never forgiven. */
+const CRITICAL_WORDS = ["am", "is", "are", "was", "were", "be", "been", "being", "not", "will", "would"];
 const WORD_EDGES = /^[^A-Za-z0-9À-ɏ]+|[^A-Za-z0-9À-ɏ]+$/g;
 
 interface SpeechVariant {

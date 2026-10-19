@@ -240,7 +240,8 @@ export const LINTS: Record<string, Lint> = {
     const out: Problem[] = [];
     const numbers = meta.map((m) => m.number);
     if (numbers.join(",") !== "1,2,3,4,5,6,7") out.push({ where: "meta", message: `days are ${numbers.join(",")}, want 1–7` });
-    meta.forEach((m) => {
+    // Day 7 is the final test (FinalDaySchema), checked by scripts/validate-final.ts.
+    meta.filter((m) => m.number !== 7).forEach((m) => {
       const day = days.find((d) => d.number === m.number);
       if (m.available && !day) out.push({ where: `meta day ${m.number}`, message: "available but has no content" });
       if (!m.available && day) out.push({ where: `meta day ${m.number}`, message: "has content but is not available" });

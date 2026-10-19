@@ -33,3 +33,12 @@ export function preflightHeaders(origin: string): Record<string, string> {
     Vary: "Origin",
   };
 }
+
+/** Response headers the app may read (fetch hides non-safelisted headers cross-origin). */
+export const EXPOSED_HEADERS = "X-TTS-Model, X-AI-Model, X-Cache";
+
+/** Adds Access-Control-Expose-Headers, but only for an allowed origin. */
+export function withExposedHeaders(cors: Record<string, string>): Record<string, string> {
+  if (!("Access-Control-Allow-Origin" in cors)) return cors;
+  return { ...cors, "Access-Control-Expose-Headers": EXPOSED_HEADERS };
+}

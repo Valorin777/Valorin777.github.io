@@ -1,25 +1,27 @@
 import { describe, expect, it } from "vitest";
 import { DaySchema, type ErrorTapExercise, type ReorderExercise } from "@/lib/content/schema";
-import { DAYS, findTopic, getDay, listDays } from "@/content/index";
+import { DAYS, findTopic, getDay, listDays, getFinal } from "@/content/index";
 import { day1 } from "@/content/days/day-1";
 import { LINTS, errorTapProblems, lintContent, reorderProblems } from "@/scripts/check-content";
 
 describe("content API", () => {
-  it("parses Day 1 with the schema", () => {
+  it("parses every lesson day with the schema", () => {
     expect(DaySchema.safeParse(day1).success).toBe(true);
-    expect(DAYS.map((d) => d.number)).toEqual([1]);
+    expect(DAYS.map((d) => d.number)).toEqual([1, 2, 3, 4, 5, 6]);
   });
 
   it("getDay returns a day or null", () => {
     expect(getDay(1)?.title).toBe("The tense map");
-    expect(getDay(2)).toBeNull();
+    expect(getDay(2)?.number).toBe(2);
+    expect(getDay(7)).toBeNull(); // Day 7 is the final test, see getFinal()
     expect(getDay(99)).toBeNull();
   });
 
-  it("listDays lists all seven days, only Day 1 available", () => {
+  it("listDays lists all seven days and marks the written ones available", () => {
     const days = listDays();
     expect(days.map((d) => d.number)).toEqual([1, 2, 3, 4, 5, 6, 7]);
-    expect(days.filter((d) => d.available).map((d) => d.number)).toEqual([1]);
+    const written = [...DAYS.map((d) => d.number), ...(getFinal() ? [7] : [])];
+    expect(days.filter((d) => d.available).map((d) => d.number)).toEqual(written);
   });
 
   it("findTopic finds Day 1 topics in order", () => {

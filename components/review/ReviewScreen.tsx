@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { SpeechProvider } from "@/components/speech/SpeechProvider";
 import { LinkButton } from "@/components/ui/Button";
 import { ArrowLeftIcon } from "@/components/ui/Icons";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -67,9 +66,7 @@ function ReviewBody() {
   }
 
   return (
-    <SpeechProvider>
-      <ReviewSession queue={queue} onFinish={() => router.push("/")} finishLabel="Back home" />
-    </SpeechProvider>
+    <ReviewSession queue={queue} onFinish={() => router.push("/")} finishLabel="Back home" />
   );
 }
 

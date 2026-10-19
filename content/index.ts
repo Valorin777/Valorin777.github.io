@@ -1,6 +1,23 @@
 import { z } from "zod";
-import { DayMetaSchema, DaySchema, type Day, type DayMeta, type Topic } from "@/lib/content/schema";
+import {
+  DayMetaSchema,
+  DaySchema,
+  DiagnosticSchema,
+  FinalDaySchema,
+  type Day,
+  type DayMeta,
+  type DiagnosticItem,
+  type FinalDay,
+  type Topic,
+} from "@/lib/content/schema";
 import { day1 } from "@/content/days/day-1";
+import { day2 } from "@/content/days/day-2";
+import { day3 } from "@/content/days/day-3";
+import { day4 } from "@/content/days/day-4";
+import { day5 } from "@/content/days/day-5";
+import { day6 } from "@/content/days/day-6";
+import { day7 } from "@/content/days/day-7";
+import { diagnostic } from "@/content/diagnostic";
 import { dayMeta } from "@/content/days/meta";
 
 /*
@@ -14,7 +31,7 @@ function parseOrThrow<S extends z.ZodType>(schema: S, input: unknown, label: str
 }
 
 /** Every written day, ordered by number. */
-export const DAYS: Day[] = [day1]
+export const DAYS: Day[] = [day1, day2, day3, day4, day5, day6]
   .map((d) => parseOrThrow(DaySchema, d, `day ${d.number}`))
   .sort((a, b) => a.number - b.number);
 
@@ -34,4 +51,18 @@ export function listDays(): DayMeta[] {
 
 export function findTopic(day: Day, topicId: string): Topic | undefined {
   return day.topics.find((t) => t.id === topicId);
+}
+
+const FINAL: FinalDay = parseOrThrow(FinalDaySchema, day7, "day 7");
+
+/** Day 7: review, speaking and the Use of English test. */
+export function getFinal(): FinalDay | null {
+  return FINAL;
+}
+
+const DIAGNOSTIC: DiagnosticItem[] = parseOrThrow(DiagnosticSchema, diagnostic, "diagnostic");
+
+/** First-visit quick check. */
+export function getDiagnostic(): DiagnosticItem[] {
+  return DIAGNOSTIC;
 }

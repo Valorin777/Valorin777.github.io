@@ -1,9 +1,29 @@
 /**
- * Voice layer: text-to-speech (speechSynthesis) and speech recognition (Web Speech API).
+ * Voice layer: text-to-speech (a natural server voice via lib/tts.ts, else speechSynthesis) and
+ * speech recognition (Web Speech API, else recording + the worker's /stt via lib/stt.ts).
  * Every function is SSR-safe, never throws and degrades to a no-op where the browser lacks
  * support. Callbacks follow one contract: onEnd fires exactly once per call, whatever happens
  * (finished, failed, cancelled, unsupported); onError, when it fires, comes before onEnd.
  */
+
+import { aiEnabled } from "@/lib/ai";
+import { transcribe } from "@/lib/stt";
+import {
+  clampRate,
+  installAudioUnlock,
+  neuralAvailable,
+  recordedUrl,
+  prefetchSpeech,
+  speakNeural,
+  speechChunks,
+  stopNeural,
+  type NeuralFailure,
+} from "@/lib/tts";
+
+export { clampRate, neuralAvailable, unlockAudio } from "@/lib/tts";
+
+// iOS only lets <audio> play after an async fetch once it has played inside a user gesture.
+installAudioUnlock();
 
 /* ------------------------------------------------------------------ support */
 
@@ -13,7 +33,10 @@ export interface SpeechSupport {
 }
 
 export function getSupport(): SpeechSupport {
-  return { tts: getSynth() !== null, recognition: getRecognitionCtor() !== null };
+  return {
+    tts: getSynth() !== null || neuralAvailable(),
+    recognition: getRecognitionCtor() !== null || serverRecognitionAvailable(),
+  };
 }
 
 /* ------------------------------------------------------------- voice ranking */
@@ -165,11 +188,6 @@ export function plainText(s: string): string {
     .trim();
 }
 
-export function clampRate(rate: number | undefined): number {
-  if (typeof rate !== "number" || !Number.isFinite(rate)) return 1;
-  return Math.min(1.2, Math.max(0.6, rate));
-}
-
 /* ------------------------------------------------------------------ helpers */
 
 function safely(fn: (() => void) | undefined): void {
@@ -299,6 +317,8 @@ function resolveLang(voice: SpeechSynthesisVoice | null, synth: SpeechSynthesis)
 
 export interface SpeakOptions {
   voiceURI?: string | null;
+  /** Worker voice id (e.g. "a1-asteria"). Used when online; the device voice is the fallback. */
+  neuralVoice?: string | null;
   rate?: number;
   onStart?: () => void;
   onEnd?: () => void;
@@ -347,9 +367,133 @@ function cancelSynth(synth: SpeechSynthesis): void {
 
 /**
  * Speaks `text` (markup stripped). Cancels whatever is speaking first. Returns a cancel function;
- * cancelling fires onEnd (not onError).
+ * cancelling fires onEnd (not onError). With `neuralVoice` set and the worker reachable, the
+ * natural voice plays; if it fails before starting, the device voice takes over silently.
  */
 export function speak(text: string, opts: SpeakOptions = {}): () => void {
+  const voice = opts.neuralVoice;
+  const isRecorded = Boolean(voice && recordedUrl(plainText(text), voice));
+  if (voice && (isRecorded || (neuralAvailable() && Date.now() >= neuralPausedUntil))) {
+    const chunks = isRecorded ? [plainText(text)] : speechChunks(plainText(text));
+    if (chunks.length) return speakNatural(chunks, voice, opts);
+  }
+  return speakDevice(text, opts);
+}
+
+/** If the natural voice has not started by then, the device voice reads the text instead. */
+const NEURAL_START_TIMEOUT_MS = 6000;
+/** After a slow or refused natural voice, use the device voice for a while. */
+const NEURAL_PAUSE_MS = 60_000;
+let neuralPausedUntil = 0;
+
+function pauseNeural(reason: NeuralFailure | "slow"): void {
+  const transient: ReadonlyArray<NeuralFailure | "slow"> = ["slow", "rate-limit", "timeout", "unavailable"];
+  if (transient.includes(reason)) neuralPausedUntil = Date.now() + NEURAL_PAUSE_MS;
+}
+
+/** Plays the pieces one after another through the natural voice. */
+function speakNatural(chunks: string[], voice: string, opts: SpeakOptions): () => void {
+  let done = false;
+  let started = false;
+  let index = 0;
+  let current: (() => void) | null = null;
+  let fallback: (() => void) | null = null;
+  let startTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const handle: ActiveSpeech = { finish, utterance: null };
+  function quiet(): void {
+    done = true;
+    if (startTimer !== null) clearTimeout(startTimer);
+    startTimer = null;
+    if (activeSpeech === handle) activeSpeech = null;
+    const stopClip = current;
+    current = null;
+    stopClip?.();
+  }
+  function finish(failed: boolean): void {
+    if (done) return;
+    quiet();
+    if (failed) safely(opts.onError);
+    safely(opts.onEnd);
+  }
+  /** The device voice reads what is left, with the same callbacks; this handle goes quiet. */
+  function handOff(): void {
+    if (done) return;
+    const rest = chunks.slice(index).join(" ");
+    quiet();
+    fallback = speakDevice(rest, {
+      voiceURI: opts.voiceURI,
+      rate: opts.rate,
+      onStart: started ? undefined : opts.onStart,
+      onEnd: opts.onEnd,
+      onError: opts.onError,
+    });
+  }
+
+  const previous = activeSpeech;
+  activeSpeech = handle;
+  previous?.finish(false);
+  const synth = getSynth();
+  if (synth && previous) cancelSynth(synth);
+
+  const playNext = (): void => {
+    if (done) return;
+    let clipStarted = false;
+    let failure: NeuralFailure | null = null;
+    current = speakNeural(chunks[index] ?? "", voice, {
+      rate: opts.rate,
+      onStart: () => {
+        if (done) return;
+        clipStarted = true;
+        if (started) return;
+        started = true;
+        if (startTimer !== null) clearTimeout(startTimer);
+        startTimer = null;
+        safely(opts.onStart);
+      },
+      onError: (reason) => {
+        failure = reason;
+      },
+      onEnd: () => {
+        if (done) return;
+        current = null;
+        if (failure !== null) {
+          if (!started) pauseNeural(failure);
+          handOff();
+        } else if (!clipStarted) {
+          // Replaced by a direct speakNeural() call elsewhere.
+          finish(false);
+        } else {
+          index += 1;
+          if (index < chunks.length) playNext();
+          else finish(false);
+        }
+      },
+    });
+  };
+
+  startTimer = setTimeout(() => {
+    startTimer = null;
+    if (done || started) return;
+    pauseNeural("slow");
+    handOff();
+  }, NEURAL_START_TIMEOUT_MS);
+  playNext();
+
+  return () => {
+    if (fallback) fallback();
+    else finish(false);
+  };
+}
+
+/** Warms the natural-voice cache for sentences about to be played (same text prep as speak). */
+export function prefetchNeuralSpeech(texts: readonly string[], neuralVoice: string | null | undefined): void {
+  if (!neuralVoice || !neuralAvailable() || Date.now() < neuralPausedUntil) return;
+  prefetchSpeech(texts.map(plainText), neuralVoice);
+}
+
+/** The device voice (speechSynthesis). */
+function speakDevice(text: string, opts: SpeakOptions): () => void {
   let done = false;
   let started = false;
   let watch: ReturnType<typeof setInterval> | null = null;
@@ -488,6 +632,7 @@ export function stopSpeaking(): void {
   const synth = getSynth();
   if (synth) cancelSynth(synth);
   activeSpeech?.finish(false);
+  stopNeural();
 }
 
 /* -------------------------------------------------------------- recognition */
@@ -614,17 +759,44 @@ export type StopListening = (mode?: "stop" | "abort") => void;
 let activeListen: { abort: () => void } | null = null;
 // Chrome may fail a recognizer started right after another one was aborted.
 let listenCooldown = false;
+/** Web Speech could not reach its service this session: record and use the worker instead. */
+let webSpeechBroken = false;
 
 /** Stops after this much silence once something was heard (Safari may never finalize). */
 const SILENCE_MS = 2500;
 /** How long to wait for "end" after stop() before giving up on the browser. */
 const END_GRACE_MS = 1500;
 
+function listenTimeout(opts: ListenOptions): number {
+  return typeof opts.timeoutMs === "number" && Number.isFinite(opts.timeoutMs) && opts.timeoutMs > 0
+    ? opts.timeoutMs
+    : 8000;
+}
+
 /**
  * One-shot recognition. Delivers onResult(alternatives) at most once, or onError; onEnd always
- * fires exactly once. Hearing nothing is reported as "no-speech".
+ * fires exactly once. Hearing nothing is reported as "no-speech". Uses Web Speech where it works,
+ * otherwise records the answer and sends it to the worker (one alternative only).
  */
 export function listen(opts: ListenOptions): StopListening {
+  const Ctor = getRecognitionCtor();
+  const server = serverRecognitionAvailable();
+  if (server && (!Ctor || webSpeechBroken)) return listenServer(opts);
+  if (!Ctor) {
+    let ended = false;
+    const finishUnsupported = (report: boolean): void => {
+      if (ended) return;
+      ended = true;
+      if (report) safely(() => opts.onError?.("unsupported"));
+      safely(opts.onEnd);
+    };
+    defer(() => finishUnsupported(true));
+    return () => finishUnsupported(false);
+  }
+  return listenWeb(opts, Ctor, server);
+}
+
+function listenWeb(opts: ListenOptions, Ctor: RecognitionCtor, serverFallback: boolean): StopListening {
   let ended = false;
   let delivered = false;
   let errored = false;
@@ -632,6 +804,7 @@ export function listen(opts: ListenOptions): StopListening {
   let started = false;
   let stopping = false;
   let rec: RecognitionLike | null = null;
+  let delegate: StopListening | null = null;
   let lastAlternatives: string[] = [];
   let startTimer: ReturnType<typeof setTimeout> | null = null;
   let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
@@ -645,21 +818,38 @@ export function listen(opts: ListenOptions): StopListening {
 
   const handle = { abort: () => stop("abort") };
 
+  function detach(): void {
+    if (!rec) return;
+    rec.onresult = null;
+    rec.onerror = null;
+    rec.onend = null;
+  }
+
   function finish(): void {
     if (ended) return;
     ended = true;
     clearTimers();
     if (activeListen === handle) activeListen = null;
-    if (rec) {
-      rec.onresult = null;
-      rec.onerror = null;
-      rec.onend = null;
-    }
+    detach();
     listenCooldown = true;
     setTimeout(() => {
       listenCooldown = false;
     }, 250);
     safely(opts.onEnd);
+  }
+
+  /** The recorder takes over with the same callbacks; this recognizer goes quiet. */
+  function handOff(): void {
+    ended = true;
+    clearTimers();
+    detach();
+    try {
+      rec?.abort();
+    } catch {
+      // ignore
+    }
+    if (activeListen === handle) activeListen = null;
+    delegate = listenServer(opts);
   }
 
   function fail(code: RecognitionError): void {
@@ -696,6 +886,10 @@ export function listen(opts: ListenOptions): StopListening {
   }
 
   function stop(mode: "stop" | "abort" = "stop"): void {
+    if (delegate) {
+      delegate(mode);
+      return;
+    }
     if (ended) return;
     if (mode === "abort" || !rec || !started) {
       aborted = true;
@@ -716,15 +910,6 @@ export function listen(opts: ListenOptions): StopListening {
       return;
     }
     armGrace(END_GRACE_MS);
-  }
-
-  const Ctor = getRecognitionCtor();
-  if (!Ctor) {
-    defer(() => {
-      fail("unsupported");
-      finish();
-    });
-    return stop;
   }
 
   const previous = activeListen;
@@ -769,7 +954,16 @@ export function listen(opts: ListenOptions): StopListening {
   };
   rec.onerror = (event) => {
     if (ended) return;
-    const code = mapRecognitionError(event?.error ?? "");
+    const raw = event?.error ?? "";
+    // Chrome's recognizer lives on Google's servers, often unreachable from Russia without a VPN.
+    if (serverFallback && (raw === "network" || raw === "service-not-allowed") && !lastAlternatives.length) {
+      webSpeechBroken = true;
+      if (!aborted && !delivered) {
+        handOff();
+        return;
+      }
+    }
+    const code = mapRecognitionError(raw);
     if (code === "aborted" && aborted) return;
     if (code === "no-speech" && lastAlternatives.length) deliver(lastAlternatives);
     else fail(code);
@@ -777,10 +971,7 @@ export function listen(opts: ListenOptions): StopListening {
   };
   rec.onend = () => wrapUp();
 
-  const timeoutMs =
-    typeof opts.timeoutMs === "number" && Number.isFinite(opts.timeoutMs) && opts.timeoutMs > 0
-      ? opts.timeoutMs
-      : 8000;
+  const timeoutMs = listenTimeout(opts);
 
   const begin = (): void => {
     startTimer = null;
@@ -798,5 +989,365 @@ export function listen(opts: ListenOptions): StopListening {
 
   if (needsGap) startTimer = setTimeout(begin, 150);
   else begin();
+  return stop;
+}
+
+/* ------------------------------------------------- server recognition (worker) */
+
+interface TrackLike {
+  stop(): void;
+}
+
+interface StreamLike {
+  getTracks(): TrackLike[];
+}
+
+interface MediaDevicesLike {
+  getUserMedia(constraints: { audio: boolean | Record<string, boolean> }): Promise<StreamLike>;
+}
+
+interface RecorderLike {
+  readonly mimeType: string;
+  readonly state: string;
+  ondataavailable: ((event: { data: Blob }) => void) | null;
+  onstop: (() => void) | null;
+  onerror: (() => void) | null;
+  start(): void;
+  stop(): void;
+}
+
+interface RecorderCtor {
+  new (stream: StreamLike, options?: { mimeType?: string; audioBitsPerSecond?: number }): RecorderLike;
+  isTypeSupported?: (type: string) => boolean;
+}
+
+interface AnalyserLike {
+  fftSize: number;
+  getByteTimeDomainData(array: Uint8Array): void;
+}
+
+interface AudioContextLike {
+  createMediaStreamSource(stream: StreamLike): { connect(node: AnalyserLike): unknown };
+  createAnalyser(): AnalyserLike;
+  resume?: () => Promise<void>;
+  close(): Promise<void>;
+}
+
+interface MediaWindow {
+  MediaRecorder?: RecorderCtor;
+  AudioContext?: new () => AudioContextLike;
+  webkitAudioContext?: new () => AudioContextLike;
+}
+
+/** Chrome/Firefox record Opus in WebM; Safari only does MP4 (AAC). */
+const RECORDER_TYPES = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+/** Stop after this much quiet once the learner has spoken. */
+const SERVER_SILENCE_MS = 1200;
+const LEVEL_TICK_MS = 100;
+/** RMS of the waveform (0–1) that counts as voice; room noise is ~0.002–0.01. */
+const SPEECH_LEVEL = 0.015;
+/** Ticks above SPEECH_LEVEL before the silence countdown may stop recording (ignores a click). */
+const SPEECH_TICKS = 2;
+
+function mediaWindow(): MediaWindow | null {
+  return typeof window === "undefined" ? null : (window as unknown as MediaWindow);
+}
+
+function getRecorderCtor(): RecorderCtor | null {
+  try {
+    const ctor = mediaWindow()?.MediaRecorder;
+    return typeof ctor === "function" ? ctor : null;
+  } catch {
+    return null;
+  }
+}
+
+function getMediaDevices(): MediaDevicesLike | null {
+  if (typeof navigator === "undefined") return null;
+  try {
+    const devices = (navigator as unknown as { mediaDevices?: MediaDevicesLike }).mediaDevices;
+    return devices && typeof devices.getUserMedia === "function" ? devices : null;
+  } catch {
+    return null;
+  }
+}
+
+function getAudioContextCtor(): (new () => AudioContextLike) | null {
+  const w = mediaWindow();
+  const ctor = w?.AudioContext ?? w?.webkitAudioContext;
+  return typeof ctor === "function" ? ctor : null;
+}
+
+function serverRecognitionAvailable(): boolean {
+  return aiEnabled() && getRecorderCtor() !== null && getMediaDevices() !== null;
+}
+
+export function pickRecorderType(isTypeSupported: ((type: string) => boolean) | undefined): string {
+  if (typeof isTypeSupported !== "function") return "";
+  for (const type of RECORDER_TYPES) {
+    try {
+      if (isTypeSupported(type)) return type;
+    } catch {
+      // ignore
+    }
+  }
+  return "";
+}
+
+/** Root mean square of 8-bit PCM (128 = silence), 0–1. */
+export function levelOf(samples: Uint8Array): number {
+  if (!samples.length) return 0;
+  let sum = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const x = ((samples[i] ?? 128) - 128) / 128;
+    sum += x * x;
+  }
+  return Math.sqrt(sum / samples.length);
+}
+
+function micError(error: unknown): RecognitionError {
+  const name = typeof error === "object" && error !== null ? (error as { name?: unknown }).name : undefined;
+  if (name === "NotAllowedError" || name === "SecurityError" || name === "PermissionDeniedError") return "not-allowed";
+  if (name === "NotFoundError" || name === "DevicesNotFoundError") return "unsupported";
+  return "other";
+}
+
+function recognitionLang(lang: string | undefined): "en" | "ru" {
+  return (lang || "en").toLowerCase().startsWith("ru") ? "ru" : "en";
+}
+
+/**
+ * Records until ~1.2 s of quiet after speech, stop() or timeoutMs, then transcribes on the
+ * worker. Same contract as the Web Speech path; onInterim gets "…" while uploading.
+ */
+function listenServer(opts: ListenOptions): StopListening {
+  let ended = false;
+  let delivered = false;
+  let errored = false;
+  let phase: "starting" | "recording" | "stopping" | "uploading" = "starting";
+  let stream: StreamLike | null = null;
+  let recorder: RecorderLike | null = null;
+  let context: AudioContextLike | null = null;
+  let levelTimer: ReturnType<typeof setInterval> | null = null;
+  let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
+  let peak = 0;
+  let mimeType = "";
+  const chunks: Blob[] = [];
+  const upload = new AbortController();
+  const handle = { abort: () => stop("abort") };
+
+  function releaseInput(): void {
+    if (levelTimer !== null) clearInterval(levelTimer);
+    if (timeoutTimer !== null) clearTimeout(timeoutTimer);
+    levelTimer = timeoutTimer = null;
+    if (recorder) {
+      recorder.ondataavailable = null;
+      recorder.onstop = null;
+      recorder.onerror = null;
+      try {
+        if (recorder.state !== "inactive") recorder.stop();
+      } catch {
+        // ignore
+      }
+    }
+    for (const track of stream?.getTracks() ?? []) {
+      try {
+        track.stop();
+      } catch {
+        // ignore
+      }
+    }
+    stream = null;
+    if (context) {
+      context.close().catch(() => undefined);
+      context = null;
+    }
+  }
+
+  function finish(): void {
+    if (ended) return;
+    ended = true;
+    releaseInput();
+    upload.abort();
+    if (activeListen === handle) activeListen = null;
+    safely(opts.onEnd);
+  }
+
+  function fail(code: RecognitionError): void {
+    if (ended || delivered || errored) return;
+    errored = true;
+    safely(() => opts.onError?.(code));
+  }
+
+  function deliver(text: string): void {
+    if (ended || delivered || errored) return;
+    delivered = true;
+    safely(() => opts.onResult([text]));
+  }
+
+  function send(): void {
+    if (ended || phase === "uploading") return;
+    phase = "uploading";
+    const type = mimeType || chunks.find((chunk) => chunk.type)?.type || "audio/webm";
+    const blob = new Blob(chunks, { type });
+    releaseInput();
+    // A working level meter that never heard a voice: nothing worth uploading.
+    const meterWorked = peak > 0.0005;
+    if (!blob.size || (meterWorked && peak < SPEECH_LEVEL)) {
+      fail("no-speech");
+      finish();
+      return;
+    }
+    safely(() => opts.onInterim?.("…"));
+    transcribe(blob, recognitionLang(opts.lang), upload.signal).then(
+      (text) => {
+        if (ended) return;
+        if (text) deliver(text);
+        else fail("no-speech");
+        finish();
+      },
+      () => {
+        if (ended) return;
+        fail("network");
+        finish();
+      },
+    );
+  }
+
+  function stopRecording(): void {
+    if (phase !== "recording") return;
+    phase = "stopping";
+    if (levelTimer !== null) clearInterval(levelTimer);
+    if (timeoutTimer !== null) clearTimeout(timeoutTimer);
+    levelTimer = timeoutTimer = null;
+    try {
+      // "dataavailable" then "stop" follow; send() runs from onstop.
+      if (recorder && recorder.state !== "inactive") {
+        recorder.stop();
+        return;
+      }
+    } catch {
+      // fall through
+    }
+    send();
+  }
+
+  function stop(mode: "stop" | "abort" = "stop"): void {
+    if (ended) return;
+    if (mode === "abort" || phase === "starting") {
+      finish();
+      return;
+    }
+    stopRecording();
+  }
+
+  function watchLevel(input: StreamLike): void {
+    const Ctx = getAudioContextCtor();
+    if (!Ctx) return;
+    try {
+      const ctx = new Ctx();
+      context = ctx;
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 1024;
+      ctx.createMediaStreamSource(input).connect(analyser);
+      ctx.resume?.().catch(() => undefined);
+      const samples = new Uint8Array(analyser.fftSize);
+      let voiced = 0;
+      let quietTicks = 0;
+      levelTimer = setInterval(() => {
+        if (phase !== "recording") return;
+        analyser.getByteTimeDomainData(samples);
+        const level = levelOf(samples);
+        peak = Math.max(peak, level);
+        if (level >= SPEECH_LEVEL) {
+          voiced += 1;
+          quietTicks = 0;
+        } else {
+          quietTicks += 1;
+        }
+        if (voiced >= SPEECH_TICKS && quietTicks * LEVEL_TICK_MS >= SERVER_SILENCE_MS) stopRecording();
+      }, LEVEL_TICK_MS);
+    } catch {
+      // No meter: stop() or the timeout ends the recording.
+    }
+  }
+
+  function record(Recorder: RecorderCtor, input: StreamLike): void {
+    const type = pickRecorderType(Recorder.isTypeSupported?.bind(Recorder));
+    try {
+      recorder = type ? new Recorder(input, { mimeType: type, audioBitsPerSecond: 48_000 }) : new Recorder(input);
+    } catch {
+      try {
+        recorder = new Recorder(input);
+      } catch {
+        fail("other");
+        finish();
+        return;
+      }
+    }
+    const rec = recorder;
+    rec.ondataavailable = (event) => {
+      if (event.data && event.data.size > 0) chunks.push(event.data);
+    };
+    rec.onstop = () => send();
+    rec.onerror = () => {
+      if (ended) return;
+      fail("other");
+      finish();
+    };
+    try {
+      rec.start();
+    } catch {
+      fail("other");
+      finish();
+      return;
+    }
+    // Safari fills mimeType only once recording has started.
+    mimeType = rec.mimeType || type;
+    phase = "recording";
+    watchLevel(input);
+    timeoutTimer = setTimeout(stopRecording, listenTimeout(opts));
+  }
+
+  const previous = activeListen;
+  activeListen = handle;
+  previous?.abort();
+  stopSpeaking();
+
+  const devices = getMediaDevices();
+  const Recorder = getRecorderCtor();
+  if (!devices || !Recorder) {
+    defer(() => {
+      fail("unsupported");
+      finish();
+    });
+    return stop;
+  }
+
+  let request: Promise<StreamLike>;
+  try {
+    request = devices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  } catch (error) {
+    defer(() => {
+      fail(micError(error));
+      finish();
+    });
+    return stop;
+  }
+  request.then(
+    (input) => {
+      if (ended) {
+        for (const track of input.getTracks()) track.stop();
+        return;
+      }
+      stream = input;
+      record(Recorder, input);
+    },
+    (error: unknown) => {
+      if (ended) return;
+      fail(micError(error));
+      finish();
+    },
+  );
   return stop;
 }

@@ -600,3 +600,407 @@ describe("with mocked Web Speech", () => {
     expect(events).toEqual(["no-speech", "end"]);
   });
 });
+
+/* ------------------------------------- natural voice and server recognition */
+
+class FakeAudio {
+  static instances: FakeAudio[] = [];
+  private readonly listeners = new Map<string, Set<() => void>>();
+  private source = "";
+  paused = true;
+  ended = false;
+  error: { code: number } | null = null;
+  preload = "";
+  playbackRate = 1;
+  defaultPlaybackRate = 1;
+  preservesPitch = false;
+  plays: string[] = [];
+  constructor() {
+    FakeAudio.instances.push(this);
+  }
+  get src(): string {
+    return this.source;
+  }
+  set src(value: string) {
+    this.source = value;
+    this.paused = true;
+    this.ended = false;
+    this.error = null;
+  }
+  addEventListener(type: string, fn: () => void): void {
+    const set = this.listeners.get(type) ?? new Set<() => void>();
+    set.add(fn);
+    this.listeners.set(type, set);
+  }
+  removeEventListener(type: string, fn: () => void): void {
+    this.listeners.get(type)?.delete(fn);
+  }
+  emit(type: string): void {
+    for (const fn of [...(this.listeners.get(type) ?? [])]) fn();
+  }
+  play(): Promise<void> {
+    this.plays.push(this.source);
+    this.paused = false;
+    return Promise.resolve();
+  }
+  pause(): void {
+    this.paused = true;
+  }
+  removeAttribute(name: string): void {
+    if (name === "src") this.source = "";
+  }
+  load(): void {}
+  playToEnd(): void {
+    this.paused = true;
+    this.ended = true;
+    this.emit("pause");
+    this.emit("ended");
+  }
+  clipPlays(): string[] {
+    return this.plays.filter((src) => src.startsWith("blob:"));
+  }
+}
+
+let micLevel = 0;
+
+class FakeAudioContext {
+  static instances: FakeAudioContext[] = [];
+  closed = false;
+  constructor() {
+    FakeAudioContext.instances.push(this);
+  }
+  createMediaStreamSource(): { connect: () => void } {
+    return { connect: () => undefined };
+  }
+  createAnalyser(): { fftSize: number; getByteTimeDomainData: (a: Uint8Array) => void } {
+    return {
+      fftSize: 2048,
+      getByteTimeDomainData: (a: Uint8Array) => {
+        const swing = Math.round(micLevel * 127);
+        for (let i = 0; i < a.length; i++) a[i] = 128 + (i % 2 ? swing : -swing);
+      },
+    };
+  }
+  resume(): Promise<void> {
+    return Promise.resolve();
+  }
+  close(): Promise<void> {
+    this.closed = true;
+    return Promise.resolve();
+  }
+}
+
+class FakeRecorder {
+  static instances: FakeRecorder[] = [];
+  static isTypeSupported(type: string): boolean {
+    return type === "audio/webm;codecs=opus";
+  }
+  mimeType: string;
+  state = "inactive";
+  ondataavailable: ((event: { data: Blob }) => void) | null = null;
+  onstop: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  constructor(_stream: unknown, options?: { mimeType?: string }) {
+    this.mimeType = options?.mimeType ?? "";
+    FakeRecorder.instances.push(this);
+  }
+  start(): void {
+    this.state = "recording";
+  }
+  stop(): void {
+    if (this.state === "inactive") return;
+    this.state = "inactive";
+    this.ondataavailable?.({ data: new Blob([new Uint8Array(800)], { type: this.mimeType }) });
+    this.onstop?.();
+  }
+}
+
+describe("natural voice and server recognition (AI enabled)", () => {
+  let synth: FakeSynth;
+  let tracks: Array<{ stop: ReturnType<typeof vi.fn> }>;
+  let getUserMedia: ReturnType<typeof vi.fn>;
+
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+  const audioResponse = () => new Response(new Uint8Array(3).fill(7), { headers: { "Content-Type": "audio/mpeg" } });
+
+  async function load(
+    fetchImpl: (url: string, init: RequestInit) => Promise<Response>,
+    opts: { webSpeech?: boolean; recorder?: boolean; mic?: () => Promise<unknown> } = {},
+  ) {
+    vi.resetModules();
+    vi.stubEnv("NEXT_PUBLIC_AI_URL", "https://ai.example.dev");
+    synth = new FakeSynth();
+    FakeRecognition.instances = [];
+    FakeAudio.instances = [];
+    FakeRecorder.instances = [];
+    FakeAudioContext.instances = [];
+    micLevel = 0;
+    tracks = [{ stop: vi.fn() }];
+    getUserMedia = vi.fn(opts.mic ?? (async () => ({ getTracks: () => tracks })));
+    vi.stubGlobal("SpeechSynthesisUtterance", FakeUtterance);
+    vi.stubGlobal("Audio", FakeAudio);
+    vi.stubGlobal("window", {
+      speechSynthesis: synth,
+      SpeechSynthesisUtterance: FakeUtterance,
+      ...(opts.webSpeech === false ? {} : { webkitSpeechRecognition: FakeRecognition }),
+      ...(opts.recorder === false ? {} : { MediaRecorder: FakeRecorder }),
+      AudioContext: FakeAudioContext,
+    });
+    vi.stubGlobal("navigator", { userAgent: "test", mediaDevices: { getUserMedia } });
+    const fetchMock = vi.fn(fetchImpl);
+    vi.stubGlobal("fetch", fetchMock);
+    const speech = await import("@/lib/speech");
+    return { speech, fetchMock };
+  }
+
+  function track() {
+    const events: string[] = [];
+    return {
+      events,
+      speakOpts: {
+        onStart: () => events.push("start"),
+        onEnd: () => events.push("end"),
+        onError: () => events.push("error"),
+      },
+      listenOpts: {
+        onInterim: (t: string) => events.push(`interim:${t}`),
+        onResult: (alts: string[]) => events.push(`result:${alts.join("|")}`),
+        onError: (e: RecognitionError) => events.push(`error:${e}`),
+        onEnd: () => events.push("end"),
+      },
+    };
+  }
+
+  const audio = (): FakeAudio => {
+    const a = FakeAudio.instances[0];
+    if (!a) throw new Error("no audio element");
+    return a;
+  };
+
+  const bodyText = (init: RequestInit | undefined): string =>
+    (JSON.parse(String(init?.body)) as { text: string }).text;
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  it("speaks with the natural voice when one is chosen; the device voice stays silent", async () => {
+    const { speech, fetchMock } = await load(async () => audioResponse());
+    const { events, speakOpts } = track();
+    speech.speak("I **have** known her ___.", { neuralVoice: "a1-asteria", rate: 0.8, ...speakOpts });
+    await vi.waitFor(() => expect(audio().clipPlays()).toHaveLength(1));
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://ai.example.dev/tts");
+    expect(JSON.parse(String(init.body))).toEqual({ text: "I have known her blank.", voice: "a1-asteria" });
+    expect(audio().playbackRate).toBe(0.8);
+    audio().emit("playing");
+    audio().playToEnd();
+    expect(events).toEqual(["start", "end"]);
+    expect(synth.spoken).toHaveLength(0);
+  });
+
+  it("without neuralVoice it uses the device voice as before", async () => {
+    const { speech, fetchMock } = await load(async () => audioResponse());
+    const { events, speakOpts } = track();
+    speech.speak("Hello", speakOpts);
+    expect(synth.spoken).toHaveLength(1);
+    synth.end();
+    expect(events).toEqual(["start", "end"]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("falls back silently to the device voice when the natural voice fails before starting", async () => {
+    const { speech, fetchMock } = await load(async () => json({ error: "upstream" }, 502));
+    const { events, speakOpts } = track();
+    speech.speak("I have known her.", { neuralVoice: "a1-asteria", ...speakOpts });
+    await vi.waitFor(() => expect(synth.spoken).toHaveLength(1));
+    expect(synth.spoken[0]?.text).toBe("I have known her.");
+    expect(events).toEqual(["start"]);
+    synth.end();
+    expect(events).toEqual(["start", "end"]);
+
+    // The worker just failed: the next sentence goes straight to the device voice.
+    const next = track();
+    speech.speak("Next one.", { neuralVoice: "a1-asteria", ...next.speakOpts });
+    expect(synth.spoken).toHaveLength(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("plays long text as consecutive clips with one onStart and one onEnd", async () => {
+    const { speech, fetchMock } = await load(async () => audioResponse());
+    const first = `${"First part of a long example sentence ".repeat(5).trim()}.`;
+    const second = `${"Second part of the same long example ".repeat(5).trim()}.`;
+    const { events, speakOpts } = track();
+    speech.speak(`${first} ${second}`, { neuralVoice: "a1-luna", ...speakOpts });
+    await vi.waitFor(() => expect(audio().clipPlays()).toHaveLength(1));
+    audio().emit("playing");
+    audio().playToEnd();
+    await vi.waitFor(() => expect(audio().clipPlays()).toHaveLength(2));
+    audio().emit("playing");
+    audio().playToEnd();
+    expect(events).toEqual(["start", "end"]);
+    expect(fetchMock.mock.calls.map(([, init]) => bodyText(init))).toEqual([first, second]);
+  });
+
+  it("stopSpeaking, cancel and a new utterance end the natural voice with one onEnd", async () => {
+    const { speech } = await load(async () => audioResponse());
+    const a = track();
+    speech.speak("One.", { neuralVoice: "a1-luna", ...a.speakOpts });
+    await vi.waitFor(() => expect(audio().clipPlays()).toHaveLength(1));
+    audio().emit("playing");
+    speech.stopSpeaking();
+    speech.stopSpeaking();
+    expect(a.events).toEqual(["start", "end"]);
+    expect(audio().paused).toBe(true);
+
+    const b = track();
+    const cancel = speech.speak("Two.", { neuralVoice: "a1-luna", ...b.speakOpts });
+    cancel();
+    cancel();
+    expect(b.events).toEqual(["end"]);
+
+    const c = track();
+    speech.speak("Three.", { neuralVoice: "a1-luna", ...c.speakOpts });
+    await vi.waitFor(() => expect(audio().clipPlays()).toHaveLength(2));
+    audio().emit("playing");
+    const d = track();
+    speech.speak("Device voice now.", d.speakOpts);
+    expect(c.events).toEqual(["start", "end"]);
+    await vi.waitFor(() => expect(synth.spoken).toHaveLength(1));
+    synth.end();
+    expect(d.events).toEqual(["start", "end"]);
+  });
+
+  it("reports recognition support with a recorder even without Web Speech", async () => {
+    const withRecorder = await load(async () => json({}), { webSpeech: false });
+    expect(withRecorder.speech.getSupport()).toEqual({ tts: true, recognition: true });
+    const none = await load(async () => json({}), { webSpeech: false, recorder: false });
+    expect(none.speech.getSupport().recognition).toBe(false);
+  });
+
+  it("records and transcribes on the worker when the browser cannot recognise speech", async () => {
+    const { speech, fetchMock } = await load(async () => json({ text: " It has started. " }), { webSpeech: false });
+    const { events, listenOpts } = track();
+    const stop = speech.listen(listenOpts);
+    await vi.waitFor(() => expect(FakeRecorder.instances[0]?.state).toBe("recording"));
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+    expect(FakeRecorder.instances[0]?.mimeType).toBe("audio/webm;codecs=opus");
+    stop();
+    await vi.waitFor(() => expect(events).toContain("end"));
+    expect(events).toEqual(["interim:…", "result:It has started.", "end"]);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://ai.example.dev/stt?lang=en");
+    expect((init.headers as Record<string, string>)["Content-Type"]).toBe("audio/webm");
+    expect((init.body as Blob).size).toBe(800);
+    expect(tracks[0]?.stop).toHaveBeenCalled();
+    expect(FakeAudioContext.instances[0]?.closed).toBe(true);
+  });
+
+  it("stops recording after ~1.2 s of silence following speech", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+    const { speech, fetchMock } = await load(async () => json({ text: "I have known her" }), { webSpeech: false });
+    const { events, listenOpts } = track();
+    speech.listen({ ...listenOpts, timeoutMs: 9000 });
+    await vi.advanceTimersByTimeAsync(0);
+    const recorder = FakeRecorder.instances[0];
+    expect(recorder?.state).toBe("recording");
+    micLevel = 0.3;
+    await vi.advanceTimersByTimeAsync(500);
+    micLevel = 0.003;
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(recorder?.state).toBe("recording");
+    await vi.advanceTimersByTimeAsync(300);
+    expect(recorder?.state).toBe("inactive");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(events).toContain("end"));
+    expect(events).toEqual(["interim:…", "result:I have known her", "end"]);
+  });
+
+  it("only room noise until the timeout: no-speech without an upload", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+    const { speech, fetchMock } = await load(async () => json({ text: "x" }), { webSpeech: false });
+    const { events, listenOpts } = track();
+    speech.listen({ ...listenOpts, timeoutMs: 2000 });
+    await vi.advanceTimersByTimeAsync(0);
+    micLevel = 0.004;
+    await vi.advanceTimersByTimeAsync(2100);
+    expect(events).toEqual(["error:no-speech", "end"]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("after a Web Speech network error the same call switches to the worker; later calls go straight there", async () => {
+    const { speech } = await load(async () => json({ text: "I have been waiting" }));
+    const { events, listenOpts } = track();
+    const stop = speech.listen(listenOpts);
+    const rec = FakeRecognition.instances[0];
+    expect(rec?.calls).toEqual(["start"]);
+    rec?.onerror?.({ error: "network" });
+    rec?.onend?.();
+    expect(rec?.calls).toContain("abort");
+    await vi.waitFor(() => expect(FakeRecorder.instances[0]?.state).toBe("recording"));
+    stop();
+    await vi.waitFor(() => expect(events).toContain("end"));
+    expect(events).toEqual(["interim:…", "result:I have been waiting", "end"]);
+
+    const second = track();
+    const stopSecond = speech.listen(second.listenOpts);
+    expect(FakeRecognition.instances).toHaveLength(1);
+    await vi.waitFor(() => expect(FakeRecorder.instances[1]?.state).toBe("recording"));
+    stopSecond("abort");
+    expect(second.events).toEqual(["end"]);
+    expect(FakeRecorder.instances[1]?.state).toBe("inactive");
+  });
+
+  it("maps mic, empty-result and server failures; abort ends once without a result", async () => {
+    const denied = await load(async () => json({ text: "x" }), {
+      webSpeech: false,
+      mic: () => Promise.reject(new DOMException("denied", "NotAllowedError")),
+    });
+    const a = track();
+    denied.speech.listen(a.listenOpts);
+    await vi.waitFor(() => expect(a.events).toEqual(["error:not-allowed", "end"]));
+
+    const empty = await load(async () => json({ text: "  " }), { webSpeech: false });
+    const b = track();
+    const stopB = empty.speech.listen(b.listenOpts);
+    await vi.waitFor(() => expect(FakeRecorder.instances[0]?.state).toBe("recording"));
+    stopB();
+    await vi.waitFor(() => expect(b.events).toEqual(["interim:…", "error:no-speech", "end"]));
+
+    const down = await load(async () => json({ error: "upstream" }, 502), { webSpeech: false });
+    const c = track();
+    const stopC = down.speech.listen(c.listenOpts);
+    await vi.waitFor(() => expect(FakeRecorder.instances[0]?.state).toBe("recording"));
+    stopC();
+    await vi.waitFor(() => expect(c.events).toEqual(["interim:…", "error:network", "end"]));
+
+    const aborted = await load(async () => json({ text: "x" }), { webSpeech: false });
+    const d = track();
+    const stopD = aborted.speech.listen(d.listenOpts);
+    await vi.waitFor(() => expect(FakeRecorder.instances[0]?.state).toBe("recording"));
+    stopD("abort");
+    stopD();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(d.events).toEqual(["end"]);
+    expect(tracks[0]?.stop).toHaveBeenCalled();
+    expect(aborted.fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("without AI the old behaviour stays: a network error is reported, not handed off", async () => {
+    vi.resetModules();
+    synth = new FakeSynth();
+    FakeRecognition.instances = [];
+    vi.stubGlobal("window", { speechSynthesis: synth, SpeechSynthesisUtterance: FakeUtterance, webkitSpeechRecognition: FakeRecognition, MediaRecorder: FakeRecorder });
+    vi.stubGlobal("navigator", { userAgent: "test", mediaDevices: { getUserMedia: vi.fn() } });
+    const speech = await import("@/lib/speech");
+    const { events, listenOpts } = track();
+    speech.listen(listenOpts);
+    FakeRecognition.instances[0]?.onerror?.({ error: "network" });
+    FakeRecognition.instances[0]?.onend?.();
+    expect(events).toEqual(["error:network", "end"]);
+  });
+});

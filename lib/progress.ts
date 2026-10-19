@@ -2,14 +2,19 @@ import { normalize } from "@/lib/answers";
 import { CategorySchema } from "@/lib/content/schema";
 import type { Category, Day, Phrase } from "@/lib/content/schema";
 import { diffDays, isDay } from "@/lib/date";
+import { bandFor, FINAL_BANDS } from "@/lib/finalTest";
 import { isDue, MIN_EF, newSrs, review } from "@/lib/srs";
 import type { Grade } from "@/lib/srs";
 import type {
   AnswerRecord,
   AppState,
   Card,
+  CategoryScore,
   DayProgress,
+  DiagnosticResult,
   ErrorEntry,
+  FinalTestResult,
+  LevelEstimate,
   Position,
   Settings,
   Streak,
@@ -26,11 +31,15 @@ export const STORAGE_VERSION = 1;
 export const DEFAULT_SETTINGS: Settings = {
   theme: "system",
   voiceURI: null,
+  neuralVoice: "oa-marin",
   rate: 0.95,
   sound: false,
   haptics: true,
   showRu: false,
 };
+
+/** updatedAt of a state that has never changed: any real change wins a merge against it. */
+export const EPOCH_ISO = "1970-01-01T00:00:00.000Z";
 
 export const RATE_MIN = 0.6;
 export const RATE_MAX = 1.2;
@@ -40,7 +49,10 @@ const DAY_MAX = 7;
 export function initialState(): AppState {
   return {
     version: STORAGE_VERSION,
+    updatedAt: EPOCH_ISO,
     settings: { ...DEFAULT_SETTINGS },
+    diagnostic: null,
+    finalTest: null,
     position: null,
     days: {},
     cards: {},
@@ -81,10 +93,13 @@ function sanitizeSettings(raw: unknown, base: Settings): Settings {
   const o = isObj(raw) ? raw : {};
   const theme = THEMES.find((t) => t === o.theme) ?? base.theme;
   const voiceURI = o.voiceURI === null ? null : (text(o.voiceURI) ?? base.voiceURI);
+  // Unknown voice ids are kept: the server owns the voice list and falls back on its own.
+  const neuralVoice = o.neuralVoice === null ? null : (text(o.neuralVoice) ?? base.neuralVoice);
   const rate = num(o.rate);
   return {
     theme,
     voiceURI,
+    neuralVoice,
     rate: clampRate(rate ?? base.rate),
     sound: bool(o.sound, base.sound),
     haptics: bool(o.haptics, base.haptics),
@@ -178,6 +193,51 @@ function migrateError(key: string, raw: unknown): ErrorEntry | null {
   };
 }
 
+const LEVELS: readonly LevelEstimate[] = ["B1-", "B1", "B1+", "B2"];
+
+function migrateScore(raw: unknown): CategoryScore | null {
+  if (!isObj(raw)) return null;
+  const total = int(raw.total, 0, 0);
+  return { correct: Math.min(total, int(raw.correct, 0, 0)), total };
+}
+
+function migrateScores(raw: unknown): Partial<Record<Category, CategoryScore>> {
+  const out: Partial<Record<Category, CategoryScore>> = {};
+  for (const [key, value] of entries(raw)) {
+    const cat = category(key);
+    const score = migrateScore(value);
+    if (cat && score) out[cat] = score;
+  }
+  return out;
+}
+
+function migrateDiagnostic(raw: unknown): DiagnosticResult | null {
+  if (!isObj(raw)) return null;
+  const completedAt = text(raw.completedAt);
+  if (!completedAt) return null;
+  const level = LEVELS.find((l) => l === raw.level) ?? null;
+  const focus = Array.isArray(raw.focus) ? raw.focus.map(category).filter((c): c is Category => c !== undefined) : [];
+  return { completedAt, level, byCategory: migrateScores(raw.byCategory), focus: [...new Set(focus)] };
+}
+
+function migrateFinalTest(raw: unknown): FinalTestResult | null {
+  if (!isObj(raw)) return null;
+  const completedAt = text(raw.completedAt);
+  if (!completedAt) return null;
+  const answers: FinalTestResult["answers"] = {};
+  for (const [key, value] of entries(raw.answers)) {
+    if (!isObj(value) || typeof value.correct !== "boolean") continue;
+    answers[key] = { given: str(value.given) ?? "", correct: value.correct };
+  }
+  const part1 = migrateScore(raw.part1) ?? { correct: 0, total: 0 };
+  const part2 = migrateScore(raw.part2) ?? { correct: 0, total: 0 };
+  const total = part1.total + part2.total;
+  const computed = total === 0 ? 0 : (100 * (part1.correct + part2.correct)) / total;
+  const percent = Math.round(Math.min(100, Math.max(0, num(raw.percent) ?? computed)));
+  const band = FINAL_BANDS.find((b) => b === raw.band) ?? bandFor(percent);
+  return { completedAt, answers, part1, part2, byCategory: migrateScores(raw.byCategory), percent, band };
+}
+
 function migrateStreak(raw: unknown): Streak {
   if (!isObj(raw)) return { current: 0, best: 0, lastDay: null };
   const current = int(raw.current, 0, 0);
@@ -199,7 +259,10 @@ export function migrate(raw: unknown): AppState {
     if (!isObj(data)) return initialState();
 
     const state = initialState();
+    state.updatedAt = text(data.updatedAt) ?? EPOCH_ISO;
     state.settings = sanitizeSettings(data.settings, DEFAULT_SETTINGS);
+    state.diagnostic = migrateDiagnostic(data.diagnostic);
+    state.finalTest = migrateFinalTest(data.finalTest);
     state.position = migratePosition(data.position);
     for (const [key, value] of entries(data.days)) {
       const n = Number(key);
@@ -219,6 +282,22 @@ export function migrate(raw: unknown): AppState {
   } catch {
     return initialState();
   }
+}
+
+/* ----------------------------------------------------- results and change */
+
+export function setDiagnostic(s: AppState, r: DiagnosticResult): AppState {
+  return { ...s, diagnostic: r };
+}
+
+export function setFinalTest(s: AppState, r: FinalTestResult): AppState {
+  return { ...s, finalTest: r };
+}
+
+/** Stamps the time of the last local change; sync uses it to pick settings and position. */
+export function touch(s: AppState, nowIso: string): AppState {
+  if (s.updatedAt === nowIso) return s;
+  return { ...s, updatedAt: nowIso };
 }
 
 /* -------------------------------------------------------------------- days */

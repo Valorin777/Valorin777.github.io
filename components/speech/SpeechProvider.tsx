@@ -24,9 +24,9 @@ const SpeechContext = createContext<SpeechApi>({
 
 /** One speaker for the whole screen, so only one sentence plays at a time. */
 export function SpeechProvider({ children }: { children: ReactNode }) {
-  const { voiceURI, rate } = useAppState().settings;
+  const { voiceURI, rate, neuralVoice } = useAppState().settings;
   const support = useSpeechSupport();
-  const { speak, stop, speakingId } = useSpeaker({ voiceURI, rate });
+  const { speak, stop, speakingId } = useSpeaker({ voiceURI, rate, neuralVoice });
   const value = useMemo(() => ({ support, speak, stop, speakingId }), [support, speak, stop, speakingId]);
   return <SpeechContext.Provider value={value}>{children}</SpeechContext.Provider>;
 }

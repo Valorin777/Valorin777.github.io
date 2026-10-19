@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { PlayButton, SpeechProvider, useSpeech } from "@/components/speech/SpeechProvider";
+import { PlayButton, useSpeech } from "@/components/speech/SpeechProvider";
 import { MicButton, recognitionMessage } from "@/components/speech/SpokenFeedback";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { ArrowLeftIcon, ArrowRightIcon } from "@/components/ui/Icons";
 import { Kbd, KeyHints } from "@/components/ui/Kbd";
+import { InlineTranslate } from "@/components/translate/InlineTranslate";
 import { RichText } from "@/components/ui/RichText";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useHotkeys } from "@/hooks/useHotkeys";
@@ -75,8 +76,7 @@ function categorize(wrong: string, right: string): Category {
 export function CoachScreen() {
   const hydrated = useHydrated();
   return (
-    <SpeechProvider>
-      <main className="mx-auto flex min-h-dvh w-full max-w-[var(--container-reading)] flex-col px-5 pt-safe">
+    <main className="mx-auto flex min-h-dvh w-full max-w-[var(--container-reading)] flex-col px-5 pt-safe">
         <header className="flex h-16 shrink-0 items-center gap-2">
           <Link
             href="/"
@@ -89,7 +89,6 @@ export function CoachScreen() {
         </header>
         {hydrated ? <CoachBody /> : <Skeleton className="mt-6 h-72 rounded-lg" />}
       </main>
-    </SpeechProvider>
   );
 }
 
@@ -314,6 +313,7 @@ function CoachBody() {
                     <p className="text-lesson text-text">
                       <RichText text={t.text} />
                     </p>
+                    <InlineTranslate text={t.text} />
                   </div>
                   <PlayButton text={t.text} id={t.id} className="mt-1" />
                 </div>

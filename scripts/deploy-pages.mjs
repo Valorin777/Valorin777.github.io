@@ -60,6 +60,7 @@ say("building…");
 sh(process.execPath, [join(ROOT, "node_modules", "next", "dist", "bin", "next"), "build"], {
   env: { NEXT_PUBLIC_BASE_PATH: "/b2", NEXT_PUBLIC_AI_URL: process.env.NEXT_PUBLIC_AI_URL ?? AI_URL },
 });
+sh(process.execPath, [join(ROOT, "scripts", "build-sw.mjs")], { env: { NEXT_PUBLIC_BASE_PATH: "/b2" } });
 const html = readFileSync(join(OUT, "index.html"), "utf8");
 const stamp = new Date().toISOString();
 if (!html.includes("/b2/_next/")) throw new Error("out/index.html does not reference /b2/_next/ — wrong basePath?");
