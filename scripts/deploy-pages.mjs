@@ -27,6 +27,8 @@ const PAGES = join(ROOT, ".pages");
 const SUB = "b2";
 const OUT = join(ROOT, "out");
 const LIVE = "https://valorin777.github.io/b2/";
+// The AI worker (worker/); its URL is public, the OpenRouter key stays a worker secret.
+const AI_URL = "https://b2-sprint-ai.b2-sprint-ai.workers.dev";
 
 const args = new Set(process.argv.slice(2));
 const dryRun = args.has("--dry-run");
@@ -56,7 +58,7 @@ const git = (argv, cwd = PAGES, capture = true) => sh("git", argv, { cwd, captur
 // ---------------------------------------------------------------- 1. build
 say("building…");
 sh(process.execPath, [join(ROOT, "node_modules", "next", "dist", "bin", "next"), "build"], {
-  env: { NEXT_PUBLIC_BASE_PATH: "/b2" },
+  env: { NEXT_PUBLIC_BASE_PATH: "/b2", NEXT_PUBLIC_AI_URL: process.env.NEXT_PUBLIC_AI_URL ?? AI_URL },
 });
 const html = readFileSync(join(OUT, "index.html"), "utf8");
 const stamp = new Date().toISOString();

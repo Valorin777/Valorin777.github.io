@@ -4,7 +4,7 @@ Seven calm days from B1 to B2+ for a Russian-speaking learner: theory one point 
 tap-first exercises, read-aloud with speech recognition, a "say it in English" drill,
 SM-2 flashcards and a voice coach.
 
-Live: https://valorin777.github.io/b2/
+Live: https://valorin777.github.io/b2/ · AI worker: https://b2-sprint-ai.b2-sprint-ai.workers.dev
 
 ## Stack
 
@@ -25,7 +25,7 @@ Set `NEXT_PUBLIC_BASE_PATH=""` to serve from the root instead of `/b2`.
 | Variable               | Where                 | What                                               |
 | ---------------------- | --------------------- | -------------------------------------------------- |
 | `NEXT_PUBLIC_BASE_PATH`| build                 | URL prefix, default `/b2` (GitHub Pages folder)    |
-| `NEXT_PUBLIC_AI_URL`   | build                 | AI worker URL; empty = AI features off             |
+| `NEXT_PUBLIC_AI_URL`   | build                 | AI worker URL; empty = AI off (deploy sets the live worker) |
 | `OPENROUTER_API_KEY`   | worker secret         | never in the client or the repo (see `worker/`)    |
 
 ## Checks
