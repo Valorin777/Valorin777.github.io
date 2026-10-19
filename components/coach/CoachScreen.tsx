@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { PlayButton, useSpeech } from "@/components/speech/SpeechProvider";
+import { useSpeech } from "@/components/speech/SpeechProvider";
 import { MicButton, recognitionMessage } from "@/components/speech/SpokenFeedback";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { ArrowLeftIcon, ArrowRightIcon } from "@/components/ui/Icons";
 import { Kbd, KeyHints } from "@/components/ui/Kbd";
-import { InlineTranslate } from "@/components/translate/InlineTranslate";
-import { TipCard } from "./TipCard";
-import { RichText } from "@/components/ui/RichText";
+import { VoiceBubble } from "./VoiceBubble";
+
+const TEXT_KEY = "b2sprint:coach-text";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useHotkeys } from "@/hooks/useHotkeys";
 import { useRecognizer } from "@/hooks/useSpeech";
@@ -65,6 +65,23 @@ function CoachBody() {
   const [ended, setEnded] = useState(false);
   const [typed, setTyped] = useState("");
   const [handsFree, setHandsFree] = useState(true);
+  // Real-conversation mode: the coach's words stay hidden until tapped. Remembered per device.
+  const [textOn, setTextOn] = useState(() => {
+    try {
+      return window.localStorage.getItem(TEXT_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [revealed, setRevealed] = useState<Set<string>>(() => new Set());
+  const toggleText = (on: boolean) => {
+    setTextOn(on);
+    try {
+      window.localStorage.setItem(TEXT_KEY, on ? "1" : "0");
+    } catch {
+      // private mode
+    }
+  };
   const [online, setOnline] = useState(true);
   const endRef = useRef<HTMLDivElement>(null);
   const lastSpokenId = useRef<string | null>(null);
@@ -246,18 +263,29 @@ function CoachBody() {
   return (
     <div className="flex flex-1 flex-col">
       <div className="flex items-center justify-between gap-3 pb-2">
-        <p className="text-sm text-text-3">{scenario.label}</p>
-        {canListen && (
+        <p className="min-w-0 truncate text-sm text-text-3">{scenario.label}</p>
+        <div className="flex shrink-0 items-center gap-4">
           <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm text-text-2">
             <input
               type="checkbox"
-              checked={handsFree}
-              onChange={(e) => setHandsFree(e.target.checked)}
+              checked={textOn}
+              onChange={(e) => toggleText(e.target.checked)}
               className="size-4 accent-[var(--accent)]"
             />
-            Hands-free
+            Текст
           </label>
-        )}
+          {canListen && (
+            <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm text-text-2">
+              <input
+                type="checkbox"
+                checked={handsFree}
+                onChange={(e) => setHandsFree(e.target.checked)}
+                className="size-4 accent-[var(--accent)]"
+              />
+              Hands-free
+            </label>
+          )}
+        </div>
       </div>
 
       <ol className="grid flex-1 content-start gap-4 pb-64" aria-live="polite">
@@ -271,22 +299,13 @@ function CoachBody() {
               className={t.role === "user" ? "justify-self-end" : "justify-self-start"}
             >
               {t.role === "assistant" ? (
-                <div className="max-w-[34rem]">
-                  <div className="flex items-start gap-1">
-                    <div className="rounded-lg rounded-tl-sm border border-line bg-surface px-4 py-3 shadow-1">
-                      <p className="text-lesson text-text">
-                        <RichText text={t.text} />
-                      </p>
-                      <InlineTranslate text={t.text} />
-                    </div>
-                    <PlayButton text={t.text} id={t.id} className="mt-1" />
-                  </div>
-                  {t.tip && (
-                    <div className="mr-12">
-                      <TipCard tip={t.tip} />
-                    </div>
-                  )}
-                </div>
+                <VoiceBubble
+                  id={t.id}
+                  text={t.text}
+                  tip={t.tip}
+                  revealed={textOn || revealed.has(t.id)}
+                  onReveal={() => setRevealed((r) => new Set(r).add(t.id))}
+                />
               ) : (
                 <div className="grid max-w-[30rem] justify-items-end gap-2">
                   <p className="rounded-lg rounded-tr-sm bg-accent-soft px-4 py-3 text-lesson text-text">{t.text}</p>

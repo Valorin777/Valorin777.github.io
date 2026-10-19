@@ -72,12 +72,12 @@ describe("coach prompts", () => {
     const prompt = coachSystemPrompt({ ...coach, ended: false });
     expect(prompt).toContain('"Coach"');
     expect(prompt).toContain("Scenario: Weekend small talk");
-    expect(prompt).toContain("2–4 short, natural sentences, at most 60 words");
-    expect(prompt).toContain("exactly ONE follow-up question");
+    expect(prompt).toContain("2–4 short sentences, at most 50 words");
+    expect(prompt).toContain("ending with exactly ONE question");
     expect(prompt).toContain("LAST message");
-    expect(prompt).toContain("the single most important mistake");
+    expect(prompt).toContain("highest-priority error");
     expect(prompt).toContain("TENSE TIP");
-    expect(prompt).toContain("Never was/were + V1 or V2");
+    expect(prompt).toContain("Never was/were + V2 as a normal past action");
     expect(prompt).toContain('"be" goes only with -ing (continuous) or V3 (passive)');
     expect(prompt).toContain("gerund vs infinitive");
     expect(prompt).toContain("third conditional");
@@ -88,15 +88,16 @@ describe("coach prompts", () => {
     expect(prompt).toContain("at most 20 words");
     expect(prompt).toContain("B1 level");
     expect(prompt).toContain("Been vs gone");
-    expect(prompt).toContain("ANSWER IT IN THE REPLY");
-    expect(prompt.length).toBeLessThan(12000);
+    expect(prompt).toContain("answer it IN THE REPLY");
+    expect(prompt).toContain("Who did it?");
+    expect(prompt.length).toBeLessThan(14000);
   });
 
   it("wraps up without a question on the last turn", () => {
     const prompt = coachSystemPrompt({ ...coach, ended: true });
     expect(prompt).toContain("LAST turn of the session");
     expect(prompt).toContain("wrap up");
-    expect(prompt).not.toContain("ending with exactly ONE follow-up question");
+    expect(prompt).not.toContain("ending with exactly ONE question");
   });
 
   it("omits the focus line when there is no focus", () => {

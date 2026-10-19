@@ -268,3 +268,17 @@
   border-radius: var(--radius-sm);
   animation: skeleton-pulse 1.6s ease-in-out infinite;
 }
+
+/* Coach voice message: bars breathe while the reply plays (transform only). */
+@keyframes voice-bar {
+  0%,
+  100% {
+    transform: scaleY(0.55);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+.voice-bar {
+  animation: voice-bar 0.9s ease-in-out infinite;
+}
