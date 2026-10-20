@@ -18,7 +18,7 @@ const reveal = {
   transition: { duration: 0.22, ease: [0.23, 1, 0.32, 1] as const },
 };
 
-function ExampleLine({ en, ru, id }: { en: string; ru?: string; id: string }) {
+export function ExampleLine({ en, ru, id }: { en: string; ru?: string; id: string }) {
   const showRuSetting = useAppState().settings.showRu;
   const [showRu, setShowRu] = useState(false);
   const visibleRu = showRuSetting || showRu;

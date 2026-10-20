@@ -13,7 +13,7 @@ import type { ExerciseStatus } from "@/components/exercises/types";
 
 type AiState = { status: "idle" | "loading" | "done" | "failed"; text?: string };
 
-function useAiExplanation(ex: Exercise, topic: Topic, given: string, lang: "en" | "ru", enabled: boolean): AiState {
+function useAiExplanation(ex: Exercise, topic: Pick<Topic, "category">, given: string, lang: "en" | "ru", enabled: boolean): AiState {
   const [state, setState] = useState<AiState>({ status: "idle" });
   useEffect(() => {
     if (!enabled || !aiEnabled()) return;
@@ -47,7 +47,7 @@ export function FeedbackPanel({
   stepId,
 }: {
   ex: Exercise;
-  topic: Topic;
+  topic: Pick<Topic, "title" | "category">;
   status: ExerciseStatus;
   given: string;
   close: boolean;

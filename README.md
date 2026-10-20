@@ -2,7 +2,8 @@
 
 Seven calm days from B1 to B2+ for a Russian-speaking learner: theory one point at a time,
 tap-first exercises, read-aloud with speech recognition, a "say it in English" drill,
-SM-2 flashcards and a voice coach.
+SM-2 flashcards, a voice coach and a tense reference (every tense with a timeline, forms,
+uses, typical Russian-speaker mistakes and practice).
 
 Live: https://valorin777.github.io/b2/ · AI worker: https://b2-sprint-ai.b2-sprint-ai.workers.dev
 
@@ -34,6 +35,7 @@ Set `NEXT_PUBLIC_BASE_PATH=""` to serve from the root instead of `/b2`.
 npm run check          # eslint + tsc + vitest + content validation
 npm run build && npx tsx scripts/e2e.ts            # walks all of Day 1 in a browser
 npm run build && npm run shots                     # screenshots 390/768/1440 × light/dark → shots/
+npm run build && npx tsx scripts/mic-check.ts --wav=answer.wav   # coach mic with a WAV as the microphone
 ```
 
 ## Deploy
@@ -54,6 +56,12 @@ AI worker: see `worker/README.md` (`npx wrangler deploy`, secret `OPENROUTER_API
    error-tap item, alt orders use the same words, etc.). Fix until it prints "Content OK".
 4. The player builds the steps automatically: rules → mistakes → note for Russian speakers →
    exercises per topic, then listen & speak, then review.
+
+## Adding a tense entry
+
+Write `content/tenses/<id>.ts` (`export const entry = { … } satisfies TenseRefInput`), add the id to
+`content/tenses/ids.ts` and `content/tenses/index.ts`, then `npx tsx scripts/validate-tense.ts <id>`.
+Record its audio with `scripts/build-audio.ts` (only new lines are recorded).
 
 ## Layout
 

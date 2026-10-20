@@ -38,7 +38,7 @@ export function ExerciseStep({
   eyebrow,
 }: {
   day: number;
-  topic: Topic;
+  topic: Pick<Topic, "title" | "category">;
   ex: Exercise;
   stepId: string;
   onNext: () => void;

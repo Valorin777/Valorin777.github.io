@@ -203,6 +203,34 @@ const SCREENS: Shot[] = [
   { name: "done", path: "/day/1/", state: stateAt(steps.length - 1, { answerAll: true, mistakes: 1 }) },
   { name: "settings", path: "/settings/", state: stateAt(3) },
   { name: "coach", path: "/coach/", state: stateAt(3) },
+  { name: "tenses", path: "/tenses/", state: stateAt(3) },
+  { name: "tense", path: "/tenses/present-perfect/", state: stateAt(3) },
+  {
+    name: "tense-uses",
+    path: "/tenses/present-perfect/",
+    state: stateAt(3),
+    act: async (p) => {
+      await p.getByRole("heading", { name: "When to use it" }).scrollIntoViewIfNeeded();
+      await p.evaluate(() => window.scrollBy(0, -80));
+    },
+  },
+  {
+    name: "tense-versus",
+    path: "/tenses/be-rule/",
+    state: stateAt(3),
+    act: async (p) => {
+      await p.getByRole("heading", { name: "Don't mix it up" }).scrollIntoViewIfNeeded();
+      await p.evaluate(() => window.scrollBy(0, -80));
+    },
+  },
+  {
+    name: "tense-practice",
+    path: "/tenses/past-perfect/",
+    state: stateAt(3),
+    act: async (p) => {
+      await p.getByRole("button", { name: /Practise/ }).click();
+    },
+  },
   { name: "not-found", path: "/nowhere/", state: null },
 ];
 

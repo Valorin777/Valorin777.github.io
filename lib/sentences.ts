@@ -1,6 +1,6 @@
 import { audioText } from "@/lib/audioKey";
 import { readableExercise, reorderSentence } from "@/lib/answers";
-import type { Day, Exercise, FinalDay } from "@/lib/content/schema";
+import type { Day, Exercise, FinalDay, TenseRef } from "@/lib/content/schema";
 
 /** The whole correct sentence of an exercise, for listening. */
 export function fullSentence(ex: Exercise): string {
@@ -42,6 +42,21 @@ export function spokenTexts(day: Day): string[] {
   }
   for (const s of day.speak) out.push(s.en[0]);
   for (const p of day.phrases) out.push(p.en);
+  return unique(out);
+}
+
+/** Every English line the tense reference may read aloud for one entry. */
+export function tenseSpokenTexts(t: TenseRef): string[] {
+  const out: string[] = [];
+  for (const f of t.forms) out.push(f.example);
+  for (const u of t.uses) out.push(u.example.en);
+  for (const v of t.versus) out.push(v.a.en, v.b.en);
+  for (const m of t.mistakes) out.push(m.right);
+  for (const e of t.examples) out.push(e.en);
+  for (const ex of t.exercises) {
+    out.push(fullSentence(ex));
+    out.push(readableExercise(ex).answer);
+  }
   return unique(out);
 }
 

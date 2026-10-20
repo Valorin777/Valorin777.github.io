@@ -10,6 +10,7 @@ import {
   BookIcon,
   CardsIcon,
   ChatIcon,
+  ClockIcon,
   CheckIcon,
   ChevronRightIcon,
   FlameIcon,
@@ -238,6 +239,7 @@ export function HomeScreen() {
             <h2 className="mb-2 font-sans text-xs font-medium tracking-[0.08em] text-text-3 uppercase">Practice</h2>
             {drill > 0 && <QuietRow href="/drill/" icon={<RefreshIcon />} title="Daily drill" meta={`${drill} items`} />}
             <QuietRow href="/review/" icon={<CardsIcon />} title="Review cards" meta={due > 0 ? `${due} due` : "All clear"} />
+            <QuietRow href="/tenses/" icon={<ClockIcon />} title="All the tenses" meta="Rules + practice" />
             <QuietRow href="/coach/" icon={<ChatIcon />} title="Speak with the coach" meta="Voice" />
             <QuietRow href="/translate/" icon={<BookIcon />} title="Translator" meta="EN ⇄ RU" />
             {mistakes > 0 && <QuietRow href="/mistakes/" icon={<SparkIcon />} title="Top mistakes" meta={`${mistakes}`} />}

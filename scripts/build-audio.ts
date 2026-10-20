@@ -13,9 +13,10 @@ import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DAYS, getFinal } from "../content/index";
+import { TENSES } from "../content/tenses/index";
 import { audioKey, audioText } from "../lib/audioKey";
 import { SCENARIOS } from "../lib/coachScenarios";
-import { finalSpokenTexts, spokenTexts } from "../lib/sentences";
+import { finalSpokenTexts, spokenTexts, tenseSpokenTexts } from "../lib/sentences";
 
 const ROOT = join(__dirname, "..");
 const AUDIO = join(ROOT, "public", "audio");
@@ -134,6 +135,7 @@ async function main() {
   const final = getFinal();
   if (final && (!ONLY || ONLY.has(7))) finalSpokenTexts(final).forEach((t) => texts.add(t));
   if (!ONLY) SCENARIOS.forEach((s) => texts.add(audioText(s.opener)));
+  if (!ONLY) TENSES.flatMap(tenseSpokenTexts).forEach((t) => texts.add(t));
 
   mkdirSync(AUDIO, { recursive: true });
   const todo = [...texts].filter((t) => !existsSync(join(AUDIO, `${audioKey(t, VOICE_ID)}.m4a`)));
@@ -163,7 +165,7 @@ async function main() {
 
   // The manifest lists every recorded line for this voice, including earlier runs.
   const have = new Set(readdirSync(AUDIO).filter((f) => f.endsWith(".m4a")).map((f) => f.slice(0, -4)));
-  const keys = [...new Set([...DAYS.flatMap(spokenTexts), ...(final ? finalSpokenTexts(final) : []), ...SCENARIOS.map((s) => audioText(s.opener))])]
+  const keys = [...new Set([...DAYS.flatMap(spokenTexts), ...(final ? finalSpokenTexts(final) : []), ...SCENARIOS.map((s) => audioText(s.opener)), ...TENSES.flatMap(tenseSpokenTexts)])]
     .map((t) => audioKey(t, VOICE_ID))
     .filter((k) => have.has(k))
     .sort();

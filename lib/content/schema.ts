@@ -355,3 +355,104 @@ export const DiagnosticItemSchema = z
   .refine((e) => e.answer < e.options.length, { message: "answer index out of range" });
 export const DiagnosticSchema = z.array(DiagnosticItemSchema).min(8).max(12);
 export type DiagnosticItem = z.infer<typeof DiagnosticItemSchema>;
+
+/* ------------------------------------------------------------ tense reference */
+
+/**
+ * The tense reference (/tenses): one page per tense or key rule, written for a Russian speaker.
+ * Explanations are in Russian (it is a cheat sheet to understand, not to immerse); every
+ * example and exercise is English. Content lives in content/tenses/<id>.ts.
+ */
+export const TenseGroupSchema = z.enum(["key", "present", "past", "future"]);
+export type TenseGroup = z.infer<typeof TenseGroupSchema>;
+
+export const TENSE_GROUP_LABELS: Record<TenseGroup, { en: string; ru: string }> = {
+  key: { en: "Start here", ru: "Главные правила" },
+  present: { en: "Present", ru: "Настоящее" },
+  past: { en: "Past", ru: "Прошедшее" },
+  future: { en: "Future", ru: "Будущее" },
+};
+
+/** -1 = far past, 0 = now, 1 = far future. */
+const TimePoint = z.number().min(-1).max(1);
+
+/**
+ * A mark on the timeline. "point" is one moment; "span" an action in progress from `at` to `to`;
+ * "repeat" a habit (ticks between `at` and `to`); "result" an arrow from `at` to `to` (the past
+ * that still matters now).
+ */
+export const TimelineMarkSchema = z
+  .object({
+    kind: z.enum(["point", "span", "repeat", "result"]),
+    at: TimePoint,
+    to: TimePoint.optional(),
+    /** Two or three English words under the mark, e.g. "I arrived". */
+    label: z.string().trim().min(1).max(24),
+  })
+  .refine((m) => m.kind === "point" || (m.to !== undefined && m.to > m.at), {
+    message: "span, repeat and result need `to` greater than `at`",
+  });
+export type TimelineMark = z.infer<typeof TimelineMarkSchema>;
+
+/** One row of the form table: "+", "−", "?" or a short label (e.g. "Type 2"). */
+export const TenseFormSchema = z.object({
+  label: z.string().trim().min(1).max(14),
+  /** The pattern as chips, e.g. ["he / she / it", "V1 + -s"]. */
+  parts: z.array(Text).min(1).max(6),
+  /** A short English example of exactly this row. */
+  example: Text,
+});
+export type TenseForm = z.infer<typeof TenseFormSchema>;
+
+export const TenseRefSchema = z.object({
+  id: Id,
+  group: TenseGroupSchema,
+  /** English name, e.g. "Present Perfect". */
+  name: Text,
+  /** Russian name or gloss, e.g. "Настоящее совершённое". */
+  ruName: Text,
+  /** English one-liner (max ~90 chars), e.g. "A past action that matters now". */
+  short: z.string().trim().min(1).max(90),
+  /** Russian: the idea in two or three sentences, as a friendly tutor would say it. */
+  idea: Text,
+  /** Error-log category for the practice answers. */
+  category: CategorySchema,
+  forms: z.array(TenseFormSchema).min(2).max(6),
+  /** Where the tense sits in time. Optional for rules that are not about time (e.g. be + verb). */
+  timeline: z
+    .object({ marks: z.array(TimelineMarkSchema).min(1).max(4), caption: Text })
+    .optional(),
+  /** When to use it: a short English label, a Russian explanation, one example. */
+  uses: z
+    .array(z.object({ en: Text, ru: Text, example: ExampleSchema }))
+    .min(2)
+    .max(5),
+  /** Signal words and phrases, with a short Russian note where it helps. */
+  signals: z
+    .array(z.object({ word: Text, note: Text.optional() }))
+    .min(2)
+    .max(10),
+  /** Contrast with the tense learners confuse it with; `a` is this tense, `b` the other one. */
+  versus: z
+    .array(
+      z.object({
+        /** Id of the other entry (it must exist in the reference). */
+        tense: Id,
+        /** Russian: the difference in one or two sentences. */
+        ru: Text,
+        a: ExampleSchema,
+        b: ExampleSchema,
+      }),
+    )
+    .min(1)
+    .max(3),
+  /** Typical Russian-speaker mistakes; `why` is in Russian. */
+  mistakes: z.array(ContrastSchema).min(3).max(6),
+  /** The memorable trick ("фишка"), in Russian. */
+  trick: Text,
+  examples: z.array(ExampleSchema).min(6).max(10),
+  exercises: z.array(ExerciseSchema).min(6).max(10),
+});
+export type TenseRef = z.infer<typeof TenseRefSchema>;
+/** Type for authoring: `export const presentSimple = { ... } satisfies TenseRefInput`. */
+export type TenseRefInput = z.input<typeof TenseRefSchema>;

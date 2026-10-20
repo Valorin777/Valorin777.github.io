@@ -8,7 +8,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "content:check": "tsx scripts/check-content.ts && tsx scripts/validate-final.ts",
+    "content:check": "tsx scripts/check-content.ts && tsx scripts/validate-final.ts && tsx scripts/validate-tense.ts --all",
     "check": "npm run lint && npm run typecheck && npm run test && npm run content:check",
     "shots": "tsx scripts/screenshots.ts",
     "deploy": "node scripts/deploy-pages.mjs"

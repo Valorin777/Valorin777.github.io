@@ -32,3 +32,9 @@ One line per non-obvious choice, with the reason.
 - prefers-reduced-motion turns all motion off (MotionConfig "user" plus a CSS guard).
 - Day N+1 unlocks after Day N, with a quiet "Open anyway" — structure by default, freedom when the learner knows better.
 - Time left is estimated from per-step seconds, not a fixed 45 — "about 12 min left" is honest after a pause.
+- The coach records a whole spoken answer (MediaRecorder → Whisper on the worker) instead of using the browser's recogniser — browsers end recognition at the first pause, and a learner thinking mid-sentence was being cut off. Our own pause detection ends the answer after ~2.6 s of quiet, or ~3.8 s after a hesitant start ("well… um"), and the tick button sends it at once.
+- The voice threshold follows the room's noise floor (quietest level of the last 5 s × 3, clamped) instead of a fixed level — a quiet mic and a noisy room both work; a live five-bar meter shows the learner they are being heard.
+- "Waiting for the first words" and "answer length" are two separate limits — 15 s to start, 90 s to finish — so a long answer is never cut by the start timeout.
+- Hands-free starts listening 350 ms after the coach stops speaking and retries once when it heard nothing — the speaker hands the audio back to the mic (iOS) and a learner who is still thinking gets a second window.
+- The tense reference explains in Russian and practises in English — it is a cheat sheet to understand, unlike the lessons, which keep the learner in English. Every entry shows the same order: idea, timeline, forms, uses, signal words, "don't mix it up", typical mistakes, the trick, examples, practice.
+- The tense map shows forms ("I was working"), not names — the learner recognises the shape they would say, then opens the rule.

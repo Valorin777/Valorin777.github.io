@@ -105,7 +105,7 @@ export function reorderProblems(e: ReorderExercise): string[] {
   return out;
 }
 
-function exerciseProblems(e: Exercise): string[] {
+export function exerciseProblems(e: Exercise): string[] {
   const out: string[] = [];
   if (e.rule.length > MAX_RULE_CHARS) out.push(`rule is ${e.rule.length} chars (max ${MAX_RULE_CHARS})`);
   switch (e.type) {

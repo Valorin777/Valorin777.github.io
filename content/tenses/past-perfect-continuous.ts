@@ -1,0 +1,231 @@
+import type { TenseRefInput } from "@/lib/content/schema";
+
+export const entry = {
+  id: "past-perfect-continuous",
+  group: "past",
+  name: "Past Perfect Continuous",
+  ruName: "Прошедшее совершённое длительное",
+  short: "How long something had been going on before a past moment",
+  idea: "Это present perfect continuous, только «сейчас» перенесено в прошлое: действие шло какое-то время до определённого момента в прошлом, а может, и после него. Оно отвечает на вопросы «сколько уже длилось к тому моменту?» и «почему тогда всё было так?» (он был без сил, потому что всю ночь работал). В живой речи это время нечастое: если длительность и процесс не важны, хватает past perfect или past simple.",
+  category: "perfect",
+  forms: [
+    { label: "+", parts: ["I / you / he / she / it / we / they", "had been", "V-ing"], example: "She **had been waiting** for an hour." },
+    { label: "−", parts: ["subject", "hadn't been", "V-ing"], example: "They **hadn't been sleeping** well." },
+    { label: "?", parts: ["Had", "subject", "been", "V-ing?"], example: "**Had** they **been arguing**?" },
+    { label: "How long?", parts: ["How long", "had", "subject", "been", "V-ing?"], example: "How long **had** he **been working** there?" },
+    { label: "Short form", parts: ["I'd / we'd / she'd", "been", "V-ing"], example: "We'**d been driving** for hours." },
+  ],
+  timeline: {
+    marks: [
+      { kind: "span", at: -0.8, to: -0.3, label: "we'd been waiting" },
+      { kind: "point", at: -0.3, label: "Tom arrived" },
+    ],
+    caption: "An activity went on for some time up to a past moment.",
+  },
+  uses: [
+    {
+      en: "How long, up to then",
+      ru: "Сколько времени действие уже шло к определённому моменту в прошлом: for an hour, since morning, how long. Оно могло продолжаться и дальше.",
+      example: {
+        en: "She **had been working** at the bank for ten years when it closed.",
+        ru: "К моменту закрытия банка она проработала там десять лет.",
+      },
+    },
+    {
+      en: "Cause of a past situation",
+      ru: "Объясняем, почему тогда всё выглядело так: усталость, мокрая дорога, красные глаза. Процесс шёл до этого момента и оставил след.",
+      example: {
+        en: "He was exhausted because he **had been coding** all night.",
+        ru: "Он был без сил, потому что всю ночь писал код.",
+      },
+    },
+    {
+      en: "Reported speech",
+      ru: "После said / told форма have been + -ing часто сдвигается в had been + -ing. Если это всё ещё правда, можно оставить have been.",
+      example: {
+        en: "She told me she **had been looking** for a new job.",
+        ru: "Она сказала мне, что ищет новую работу.",
+      },
+    },
+  ],
+  signals: [
+    { word: "for + period", note: "сколько уже длилось к моменту в прошлом: for two hours" },
+    { word: "since + start point", note: "с какого момента шло: since morning" },
+    { word: "how long", note: "How long had you been…? — сколько уже длилось к тому моменту" },
+    { word: "all day / all night", note: "весь период до того момента" },
+    { word: "when", note: "отмечает момент в прошлом, до которого шло действие" },
+    { word: "before", note: "до какого события шло действие: before she moved" },
+    { word: "by the time" },
+  ],
+  versus: [
+    {
+      tense: "past-perfect",
+      ru: "Had been painting: шёл процесс (мог и не закончить), остались следы — одежда в краске. Had painted: работа сделана, виден результат — кухня как новая.",
+      a: {
+        en: "He **had been painting** the kitchen, so his clothes were covered in paint.",
+        ru: "Он красил кухню, поэтому вся одежда была в краске.",
+      },
+      b: { en: "He **had painted** the kitchen, so it looked brand new.", ru: "Он покрасил кухню, и она выглядела как новая." },
+    },
+    {
+      tense: "past-continuous",
+      ru: "Was crying: она плакала прямо в тот момент, когда мы вошли. Had been crying: уже не плакала, но было видно, что плакала до этого.",
+      a: { en: "When we came in, she **had been crying**.", ru: "Когда мы вошли, было видно, что она плакала." },
+      b: { en: "When we came in, she **was crying**.", ru: "Когда мы вошли, она плакала." },
+    },
+    {
+      tense: "present-perfect-continuous",
+      ru: "Have been waiting: ждём до сих пор, отсчёт от «сейчас». Had been waiting: ожидание закончилось в прошлом, когда пришёл Том.",
+      a: { en: "We **had been waiting** for an hour when Tom arrived.", ru: "Мы ждали уже час, когда пришёл Том." },
+      b: { en: "We **have been waiting** for an hour, and Tom still isn't here.", ru: "Мы ждём уже час, а Тома всё нет." },
+    },
+  ],
+  mistakes: [
+    {
+      wrong: "I was waiting for two hours when she finally came.",
+      right: "I had been waiting for two hours when she finally came.",
+      why: "Если говоришь, сколько действие уже длилось к моменту в прошлом (for two hours … when), нужно had been + -ing.",
+    },
+    {
+      wrong: "We had been waited for the bus for an hour when it finally came.",
+      right: "We had been waiting for the bus for an hour when it finally came.",
+      why: "Had been + V3 — это пассив («нас ждали»); «мы ждали» — процесс, значит -ing: had been waiting.",
+    },
+    {
+      wrong: "She has been working there for six years when the company closed.",
+      right: "She had been working there for six years when the company closed.",
+      why: "Точка отсчёта в прошлом (when the company closed), поэтому had, а не has.",
+    },
+    {
+      wrong: "By lunch she had been writing five emails.",
+      right: "By lunch she had written five emails.",
+      why: "Есть количество (five emails) — это результат, поэтому нужен past perfect simple: had written.",
+    },
+    {
+      wrong: "They had been knowing each other for years before they got married.",
+      right: "They had known each other for years before they got married.",
+      why: "Know — глагол состояния, в continuous его не ставят даже с for: had known.",
+    },
+  ],
+  trick:
+    "Возьми present perfect continuous (I've been waiting) и перенеси «сейчас» в прошлое: have превращается в had, и получается I'd been waiting when she called. Спроси себя: «сколько уже шло к тому моменту?» или «почему тогда было так?» Если ответ про процесс, бери had been + -ing; если про результат, количество или глагол состояния (know, believe, own), хватит had + V3.",
+  examples: [
+    {
+      en: "Kate **had been waiting** for 20 minutes when the doctor finally called her in.",
+      ru: "Кейт ждала уже 20 минут, когда врач наконец её позвал.",
+    },
+    { en: "The road was wet: it **had been raining** all night.", ru: "Дорога была мокрая: всю ночь шёл дождь." },
+    {
+      en: "How long **had** you **been learning** English before you got the job?",
+      ru: "Сколько вы учили английский до того, как получили эту работу?",
+    },
+    {
+      en: "They **hadn't been talking** for long when the connection dropped.",
+      ru: "Они проговорили совсем недолго, и тут связь оборвалась.",
+    },
+    { en: "Her eyes were red. **Had** she **been crying**?", ru: "У неё были красные глаза. Она что, плакала?" },
+    {
+      en: "The developers **had been fixing** bugs for weeks before the release.",
+      ru: "Разработчики несколько недель исправляли баги перед релизом.",
+    },
+    {
+      en: "By the time Max found a flat, he **had been looking** for three months.",
+      ru: "Когда Макс нашёл квартиру, он искал её уже три месяца.",
+    },
+    {
+      en: "She said she **had been feeling** unwell since Monday.",
+      ru: "Она сказала, что плохо себя чувствует с понедельника.",
+    },
+    {
+      en: "The server **had been running** without problems for months before it crashed.",
+      ru: "Сервер месяцами работал без сбоев, пока не упал.",
+    },
+    {
+      en: "Our legs hurt because we **had been walking** around Rome all day.",
+      ru: "У нас болели ноги: мы весь день гуляли по Риму.",
+    },
+  ],
+  exercises: [
+    {
+      id: "ppc-waiting-hour",
+      type: "choice",
+      prompt: "We ___ for an hour when the taxi finally arrived.",
+      options: ["have been waiting", "had been waiting", "had been waited", "were waited"],
+      answer: 1,
+      rule: "How long, up to a past moment → had been + -ing",
+      explain: "The waiting went on for an hour up to a moment in the past (the taxi arrived), so use had been waiting. Had been waited would be passive.",
+      ruHint: "Ждали час до момента в прошлом — had been waiting.",
+    },
+    {
+      id: "ppc-how-long",
+      type: "reorder",
+      words: ["how", "long", "had", "you", "been", "waiting"],
+      end: "?",
+      rule: "How long + had + subject + been + -ing?",
+      explain: "In the question, had goes before the subject, then been + -ing: How long had you been waiting?",
+      ruHint: "Had — перед подлежащим, потом been waiting.",
+    },
+    {
+      id: "ppc-reading-book",
+      type: "fill",
+      before: "Max ",
+      after: " the book for a week, but he still hadn't finished it.",
+      answers: ["had been reading"],
+      base: "read",
+      rule: "Unfinished activity up to then → had been + -ing",
+      explain: "He read for a week but did not finish, so this is about the activity, not the result: had been reading. Had read would mean he finished it.",
+      ruHint: "Читал неделю, но не дочитал — процесс: had been reading.",
+    },
+    {
+      id: "ppc-still-now",
+      type: "choice",
+      prompt: "I'm exhausted. I ___ on this report since 8 am, and it's still not finished.",
+      options: ["had been working", "was working", "have been working"],
+      answer: 2,
+      rule: "Still going on now → have been, not had been",
+      explain: "The work started at 8 am and is still going on now, so use present perfect continuous: have been working. Had been is for a moment in the past.",
+      ruHint: "Работа идёт до сих пор — have been working; had been — только про прошлое.",
+    },
+    {
+      id: "ppc-friends-waiting",
+      type: "errorTap",
+      sentence: "When I finally found the café, my friends have been waiting for 40 minutes.",
+      wrong: 8,
+      correct: "When I finally found the café, my friends had been waiting for 40 minutes.",
+      rule: "End point in the past → had been, not have been",
+      explain: "The waiting went on up to a past moment (when I found the café), so use had been waiting, not have.",
+      ruHint: "Точка отсчёта в прошлом — had been, а не have been.",
+    },
+    {
+      id: "ppc-ten-calls",
+      type: "choice",
+      prompt: "By lunchtime she ___ ten calls, so she took a break.",
+      options: ["had been making", "had made", "has made", "was making"],
+      answer: 1,
+      rule: "How many (a number done) → had + V3, not -ing",
+      explain: "Ten calls is a result you can count, so use past perfect simple: had made. The continuous form says how long, not how many.",
+      ruHint: "Есть количество (ten calls) — результат: had made.",
+    },
+    {
+      id: "ppc-anna-crying",
+      type: "choice",
+      prompt: "Anna was smiling when we came in, but her eyes were red: she ___.",
+      options: ["had been crying", "was crying", "has been crying", "had been cried"],
+      answer: 0,
+      rule: "Traces of an earlier activity → had been + -ing",
+      explain: "She was not crying any more, but her red eyes showed the earlier activity: had been crying. Was crying would mean she was crying at that moment.",
+      ruHint: "Уже не плакала, но следы остались — had been crying.",
+    },
+    {
+      id: "ppc-known-years",
+      type: "fill",
+      before: "By 2015 they ",
+      after: " each other for ten years.",
+      answers: ["had known"],
+      base: "know",
+      rule: "State verbs (know) → had + V3, not had been + -ing",
+      explain: "Know is a state verb, so it does not take -ing, even with for. Use past perfect simple: had known.",
+      ruHint: "Know — глагол состояния: had known, а не had been knowing.",
+    },
+  ],
+} satisfies TenseRefInput;

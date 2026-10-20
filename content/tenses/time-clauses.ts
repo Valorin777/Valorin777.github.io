@@ -1,0 +1,263 @@
+import type { TenseRefInput } from "@/lib/content/schema";
+
+export const entry = {
+  id: "time-clauses",
+  group: "key",
+  name: "Time Clauses: when, if, until",
+  ruName: "Будущее после when, if, until",
+  short: "No will after when, if, as soon as, until: present for the future",
+  idea: "После when, if, as soon as, before, after, until, once, by the time и in case будущее передаём настоящим временем, обычно present simple, а will остаётся только в главной части. По-русски «когда я приду» звучит в будущем, а по-английски when I come: будущее уже видно из главной части, и второй раз через will его не показывают. Если важно, что действие к тому моменту закончится, берём present perfect: after I've finished.",
+  category: "conditionals",
+  forms: [
+    {
+      label: "+",
+      parts: ["will + V1", "when / if / until…", "present simple"],
+      example: "I'll call you when I **land**.",
+    },
+    {
+      label: "Done first",
+      parts: ["will + V1", "after / when / once…", "present perfect"],
+      example: "We'll leave after we'**ve had** breakfast.",
+    },
+    {
+      label: "−",
+      parts: ["if / when / in case…", "don't / doesn't + V1"],
+      example: "If you **don't hurry**, we'll miss the train.",
+    },
+    {
+      label: "?",
+      parts: ["Will", "subject", "V1", "when / if…", "present simple?"],
+      example: "Will you text me when you **get** home?",
+    },
+    {
+      label: "Clause first",
+      parts: ["When / If + present,", "will + V1"],
+      example: "As soon as she **arrives**, we'll start.",
+    },
+  ],
+  timeline: {
+    marks: [
+      { kind: "point", at: 0.35, label: "when I land" },
+      { kind: "point", at: 0.5, label: "I'll call you" },
+    ],
+    caption: "Both are in the future, but only the main part takes will.",
+  },
+  uses: [
+    {
+      en: "Future after time words",
+      ru: "После when, as soon as, before, after, until, once и by the time будущее передаём настоящим временем, обычно present simple. Will стоит только в главной части.",
+      example: {
+        en: "I'll text you as soon as I **get** to the hotel.",
+        ru: "Напишу тебе, как только доберусь до отеля.",
+      },
+    },
+    {
+      en: "Conditions: if, unless, in case",
+      ru: "С if (если), unless (если не) и in case (на случай, если) то же правило: present simple, хотя по-русски звучит будущее.",
+      example: {
+        en: "If the bank **approves** the loan, we'll buy the flat.",
+        ru: "Если банк одобрит кредит, мы купим квартиру.",
+      },
+    },
+    {
+      en: "Finished first: present perfect",
+      ru: "Если важно, что одно действие закончится раньше другого, после when, after, as soon as, once, until можно взять present perfect: when I've finished = «когда уже закончу». Если действия одновременные (When I see him, I'll tell him), только present simple.",
+      example: {
+        en: "You can borrow the book when I'**ve read** it.",
+        ru: "Можешь взять книгу, когда я её дочитаю.",
+      },
+    },
+    {
+      en: "When will is correct",
+      ru: "Если when — это вопрос «когда?», а if — «ли» (I don't know when…, I wonder if…), это уже не время и не условие, и will нужен. Изредка will после if значит вежливое «будьте добры» (If you'll wait here, I'll get the manager), но это особый случай.",
+      example: {
+        en: "I don't know if she'**ll come** to the party.",
+        ru: "Не знаю, придёт ли она на вечеринку.",
+      },
+    },
+  ],
+  signals: [
+    { word: "when", note: "«когда»: when I get home" },
+    { word: "if", note: "«если»; но if = «ли» (whether) — will можно" },
+    { word: "as soon as", note: "«как только»" },
+    { word: "before", note: "«до того как, перед тем как»" },
+    { word: "after", note: "часто с present perfect: after I've finished" },
+    { word: "until", note: "«пока не»: until you come back — без второго not" },
+    { word: "once", note: "«как только, после того как»" },
+    { word: "by the time", note: "«к тому времени, как»" },
+    { word: "in case", note: "«на случай, если»; «в случае, если» — это просто if" },
+    { word: "unless", note: "= if not: unless you hurry" },
+  ],
+  versus: [
+    {
+      tense: "future-simple",
+      ru: "В первой фразе when = «в тот момент, когда»: это время, will нельзя. Во второй when = «во сколько?», это вопрос внутри фразы, и will нужен.",
+      a: { en: "Let me know when you **arrive**.", ru: "Дай знать, когда приедешь (напиши, как будешь на месте)." },
+      b: { en: "Let me know when you'**ll arrive**.", ru: "Сообщи, во сколько приедешь." },
+    },
+    {
+      tense: "present-perfect",
+      ru: "Обе фразы правильные: present perfect подчёркивает, что сначала дело будет полностью закончено. Если действия одновременные (When I see him, I'll tell him), только present simple.",
+      a: { en: "I'll send you the file when I **finish** it.", ru: "Пришлю тебе файл, когда закончу его." },
+      b: { en: "I'll send you the file when I'**ve finished** it.", ru: "Пришлю тебе файл, когда полностью его закончу." },
+    },
+    {
+      tense: "conditionals",
+      ru: "Реальное будущее: present после if и will в главной части. Мечта или что-то маловероятное: past после if и would.",
+      a: { en: "If we **get** the contract, we'**ll open** an office in Dubai.", ru: "Если мы получим контракт, откроем офис в Дубае." },
+      b: {
+        en: "If we **got** the contract, we'**d open** an office in Dubai.",
+        ru: "Если бы мы получили контракт, мы бы открыли офис в Дубае.",
+      },
+    },
+  ],
+  mistakes: [
+    {
+      wrong: "When the meeting will finish, I'll call you.",
+      right: "When the meeting finishes, I'll call you.",
+      why: "После when — present simple, даже если по-русски «когда закончится»; will только в главной части.",
+    },
+    {
+      wrong: "I'll call you as soon as I will finish.",
+      right: "I'll call you as soon as I finish.",
+      why: "As soon as работает как when: present simple (или present perfect: as soon as I've finished).",
+    },
+    {
+      wrong: "We'll wait here until the rain doesn't stop.",
+      right: "We'll wait here until the rain stops.",
+      why: "Until уже значит «пока не», поэтому второе not не нужно: until the rain stops.",
+    },
+    {
+      wrong: "If you will need help, call me.",
+      right: "If you need help, call me.",
+      why: "If в значении «если» — present simple, даже когда речь о будущем.",
+    },
+    {
+      wrong: "Take an umbrella in case it will rain.",
+      right: "Take an umbrella in case it rains.",
+      why: "In case («на случай, если») подчиняется тому же правилу: present simple без will.",
+    },
+    {
+      wrong: "I'm not sure if Max comes tomorrow.",
+      right: "I'm not sure if Max will come tomorrow.",
+      why: "Здесь if = «ли» (не знаю, придёт ли Макс): это вопрос, а не условие, поэтому will нужен.",
+    },
+  ],
+  trick: "Будущее уже показано в главной части (I'll call you), в кусок с when или if второй will не ставим: when I land, а не when I will land. Проверка: если кусок отвечает на «в какой момент?» или «при каком условии?», will туда не ставим. Если же when — это вопрос «когда?», а if — «ли» (подставь whether), will нужен: Let me know when you'll arrive.",
+  examples: [
+    { en: "I'll text you as soon as I **land** in Istanbul.", ru: "Напишу тебе, как только приземлюсь в Стамбуле." },
+    {
+      en: "When you **get** to the office, ask for Maria at reception.",
+      ru: "Когда доберёшься до офиса, спроси Марию на ресепшене.",
+    },
+    { en: "We won't start the meeting until everyone **arrives**.", ru: "Мы не начнём встречу, пока все не придут." },
+    {
+      en: "Can you call me before you **leave** the office?",
+      ru: "Можешь позвонить мне перед тем, как выйдешь из офиса?",
+    },
+    {
+      en: "I'll send you the invoice after I'**ve checked** the numbers.",
+      ru: "Пришлю тебе счёт, после того как проверю цифры.",
+    },
+    {
+      en: "If the client **doesn't reply** by Friday, we'll call them.",
+      ru: "Если клиент не ответит к пятнице, мы ему позвоним.",
+    },
+    { en: "Once the visa **is** ready, we'll book the flights.", ru: "Как только виза будет готова, забронируем билеты." },
+    {
+      en: "Take a jacket in case it **gets** cold in the evening.",
+      ru: "Возьми куртку на случай, если вечером похолодает.",
+    },
+    {
+      en: "By the time we **get** there, the shop will have closed.",
+      ru: "Пока мы доберёмся, магазин уже закроется.",
+    },
+    {
+      en: "I'm not sure when the results **will be** ready, maybe next week.",
+      ru: "Не знаю точно, когда будут готовы результаты, может, на следующей неделе.",
+    },
+  ],
+  exercises: [
+    {
+      id: "tc-when-get-home",
+      type: "choice",
+      prompt: "We'll have dinner when Dad ___ home.",
+      options: ["will get", "gets", "would get", "got"],
+      answer: 1,
+      rule: "when + present simple for the future",
+      explain: "After when, the future is shown with present simple: when Dad gets home. Will goes only in the main part: we'll have dinner.",
+      ruHint: "«Когда папа придёт» — when Dad gets home, без will.",
+    },
+    {
+      id: "tc-plane-lands",
+      type: "fill",
+      before: "I'll text you as soon as the plane ",
+      after: ".",
+      answers: ["lands", "has landed"],
+      base: "land",
+      rule: "as soon as + present simple (it + -s)",
+      explain: "As soon as works like when: present simple for the future. With it (the plane), add -s: lands. Has landed is also fine.",
+      ruHint: "«Как только самолёт приземлится» — as soon as the plane lands.",
+    },
+    {
+      id: "tc-until-come-back",
+      type: "choice",
+      prompt: "Don't leave the office until I ___ back.",
+      options: ["will come", "don't come", "come", "won't come"],
+      answer: 2,
+      rule: "until + present simple, no extra not",
+      explain: "Until already means 'up to the moment when', so no not and no will: until I come back.",
+      ruHint: "«Пока я не вернусь» — until I come back, без not и без will.",
+    },
+    {
+      id: "tc-in-case-card",
+      type: "errorTap",
+      sentence: "Take some cash in case they'll want a tip.",
+      wrong: 5,
+      correct: "Take some cash in case they want a tip.",
+      rule: "in case + present simple, not will",
+      explain: "In case follows the same rule as if and when: present simple for the future, so no will: in case they want a tip.",
+      ruHint: "«На случай, если там попросят чаевые» — in case they want a tip, без will.",
+    },
+    {
+      id: "tc-after-finished",
+      type: "fill",
+      before: "You can go home after you ",
+      after: " the report.",
+      answers: ["have finished", "finish"],
+      base: "finish",
+      rule: "after + present perfect or present simple, not will",
+      explain: "After takes present perfect (have finished) to show the report is done first, or present simple (finish). Never will.",
+      ruHint: "«После того как закончишь» — after you've finished (или after you finish).",
+    },
+    {
+      id: "tc-once-signed",
+      type: "reorder",
+      words: ["once", "you've", "signed", "the", "contract", "we'll", "book", "the", "flights"],
+      alt: [["we'll", "book", "the", "flights", "once", "you've", "signed", "the", "contract"]],
+      rule: "once + present perfect; will only in the main part",
+      explain: "Once means 'as soon as, after'. It takes present perfect for the finished action (you've signed); will goes in the main part (we'll book).",
+      ruHint: "«Как только подпишешь договор, забронируем билеты» — once you've signed the contract, we'll book…",
+    },
+    {
+      id: "tc-by-the-time-message",
+      type: "errorTap",
+      sentence: "By the time you will get this message, I'll be on the plane.",
+      wrong: 4,
+      correct: "By the time you get this message, I'll be on the plane.",
+      rule: "by the time + present simple, not will",
+      explain: "By the time is a time phrase like when: present simple for the future, so delete will: by the time you get.",
+      ruHint: "«К тому времени, как ты получишь» — by the time you get, без will.",
+    },
+    {
+      id: "tc-wonder-if-rain",
+      type: "choice",
+      prompt: "I wonder if it ___ tomorrow: we want to go hiking.",
+      options: ["rains", "will rain", "rain", "rained"],
+      answer: 1,
+      rule: "if = whether → will is correct",
+      explain: "Here if means whether: it is a question, not a condition. So the future takes will: I wonder if it will rain.",
+      ruHint: "«Интересно, будет ли дождь» — if = «ли», поэтому will.",
+    },
+  ],
+} satisfies TenseRefInput;

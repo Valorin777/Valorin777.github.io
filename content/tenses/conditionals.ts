@@ -1,0 +1,261 @@
+import type { TenseRefInput } from "@/lib/content/schema";
+
+export const entry = {
+  id: "conditionals",
+  group: "key",
+  name: "Conditionals",
+  ruName: "Условные предложения",
+  short: "If-sentences: is it real or not, and is it about now or the past?",
+  idea: "Каждое «если» проверяй двумя вопросами: это реально или фантазия? и это про сейчас/будущее или про прошлое? Реальное будущее идёт с present после if (If it rains, we'll stay at home), а нереальное делает шаг назад во времени: фантазия о сейчас или будущем берёт past, фантазия о прошлом — had + V3. Русское «если бы» — это всегда нереальность, то есть второй, третий или смешанный тип.",
+  category: "conditionals",
+  forms: [
+    { label: "Zero", parts: ["If + present", "present"], example: "If you **heat** ice, it **melts**." },
+    { label: "First", parts: ["If + present", "will + V1"], example: "If you **leave** now, you'**ll catch** the bus." },
+    { label: "Second", parts: ["If + past", "would + V1"], example: "If I **had** more time, I'**d learn** Spanish." },
+    {
+      label: "Third",
+      parts: ["If + had + V3", "would have + V3"],
+      example: "If you **had asked** me, I **would have helped**.",
+    },
+    {
+      label: "Mixed",
+      parts: ["If + had + V3", "would + V1 (now)"],
+      example: "If I **had studied** IT, I **would be** a developer now.",
+    },
+  ],
+  timeline: {
+    marks: [
+      { kind: "point", at: -0.6, label: "If I had known (3rd)" },
+      { kind: "span", at: -0.15, to: 0.35, label: "If I knew (2nd)" },
+      { kind: "point", at: 0.65, label: "If it rains (1st)" },
+    ],
+    caption: "Real ifs look ahead; unreal ifs step one tense back.",
+  },
+  uses: [
+    {
+      en: "Zero: always true",
+      ru: "Факты, законы природы, правила и твои привычные реакции: если А, то всегда Б. В обеих частях present simple, и if почти всегда можно заменить на when.",
+      example: { en: "If you **mix** red and blue, you **get** purple.", ru: "Если смешать красный и синий, получится фиолетовый." },
+    },
+    {
+      en: "First: real future",
+      ru: "Ситуация в будущем, которая вполне может случиться. После if — present simple (смысл будущий, но без will), в главной части — will, can, may или повелительное наклонение.",
+      example: { en: "If the client **agrees**, we'**ll start** on Monday.", ru: "Если клиент согласится, мы начнём в понедельник." },
+    },
+    {
+      en: "Second: unreal now",
+      ru: "То самое «если бы» про сейчас или маловероятное будущее. После if — past simple (это не прошлое, а знак нереальности), в главной части — would + V1; с be часто were для всех лиц.",
+      example: {
+        en: "If we **lived** by the sea, we **would swim** every day.",
+        ru: "Если бы мы жили у моря, мы бы купались каждый день.",
+      },
+    },
+    {
+      en: "Third: unreal past",
+      ru: "«Если бы» про прошлое, которое уже не изменить: сожаления и упущенные шансы. После if — had + V3, в главной части — would have + V3 (или could / might have + V3).",
+      example: {
+        en: "If we **had taken** a taxi, we **would have arrived** on time.",
+        ru: "Если бы мы взяли такси, мы бы приехали вовремя.",
+      },
+    },
+    {
+      en: "Mixed: past → now",
+      ru: "Условие в прошлом, а последствие видно сейчас: If + had + V3, would + V1 (часто с now). Бывает и наоборот: If I were braver, I would have said yes (нереальное «вообще» → прошлое).",
+      example: {
+        en: "If he **had taken** the job in Berlin, he **would live** in Germany now.",
+        ru: "Если бы он тогда согласился на работу в Берлине, он бы сейчас жил в Германии.",
+      },
+    },
+  ],
+  signals: [
+    { word: "if", note: "после if про будущее — present, без will" },
+    { word: "unless", note: "= if … not; само уже отрицание: unless you hurry" },
+    { word: "when", note: "when — точно случится, if — может быть; после обоих без will" },
+    { word: "as long as / provided (that)", note: "«при условии, что»; обычно с реальным условием" },
+    { word: "in case", note: "«на случай, если» — это не if: I'll take a book in case I get bored" },
+    { word: "If I were you", note: "совет «на твоём месте»; were для всех лиц, was — разговорный вариант" },
+    { word: "imagine / suppose", note: "+ past для фантазии: Imagine you lived in Bali" },
+    { word: "I wish / if only", note: "та же логика шага назад: I wish I knew = жаль, что не знаю" },
+  ],
+  versus: [
+    {
+      tense: "time-clauses",
+      ru: "If — может случиться, а может и нет; when — точно случится, вопрос только когда. Грамматика одна: после обоих present, will только в главной части.",
+      a: { en: "If I **see** Tom, I'**ll tell** him.", ru: "Если увижу Тома, скажу ему." },
+      b: { en: "When I **see** Tom, I'**ll tell** him.", ru: "Когда увижу Тома, скажу ему." },
+    },
+    {
+      tense: "past-simple",
+      ru: "Во втором типе past после if — не прошлое, а нереальность сейчас: машины у нас нет. Обычный past simple — про то, что действительно было.",
+      a: {
+        en: "If we **had** a car, we **would drive** to work.",
+        ru: "Если бы у нас была машина, мы бы ездили на ней на работу.",
+      },
+      b: { en: "When we **had** a car, we **drove** to work.", ru: "Когда у нас была машина, мы ездили на ней на работу." },
+    },
+    {
+      tense: "past-perfect",
+      ru: "Форма та же — had + V3, но в третьем типе это нереальность (на самом деле не забронировали), а в past perfect — реальный факт, случившийся раньше другого.",
+      a: {
+        en: "If we **had booked** the hotel in May, it **would have been** cheaper.",
+        ru: "Если бы мы забронировали отель в мае, было бы дешевле.",
+      },
+      b: {
+        en: "We **had booked** the hotel in May, before the prices went up.",
+        ru: "Мы забронировали отель ещё в мае, до того как выросли цены.",
+      },
+    },
+  ],
+  mistakes: [
+    {
+      wrong: "If the price will go down, we will buy it.",
+      right: "If the price goes down, we will buy it.",
+      why: "После if про будущее нужен present: will ставится только в главную часть.",
+    },
+    {
+      wrong: "If I would have time, I would help you.",
+      right: "If I had time, I would help you.",
+      why: "Русское «бы» после if передаётся через past (had, knew, were), а would ставь в главную часть.",
+    },
+    {
+      wrong: "If you told me yesterday, I would help you.",
+      right: "If you had told me yesterday, I would have helped you.",
+      why: "Русское «если бы» одно на все времена, а в английском про прошлое нужны had + V3 и would have + V3.",
+    },
+    {
+      wrong: "If I am you, I would call her.",
+      right: "If I were you, I would call her.",
+      why: "«На твоём месте» — нереальная ситуация, поэтому If I were you, а не am.",
+    },
+    {
+      wrong: "I would have go there if I had known.",
+      right: "I would have gone there if I had known.",
+      why: "После would have всегда V3: gone, seen, done.",
+    },
+    {
+      wrong: "Unless you don't hurry, you'll miss the train.",
+      right: "Unless you hurry, you'll miss the train.",
+      why: "Unless уже значит «если не», второе отрицание не нужно.",
+    },
+  ],
+  trick: "Задай два вопроса: это реально? и это про прошлое? Реальное будущее → If + present, will; «если бы» про сейчас или будущее → If + past, would + V1; «если бы» про прошлое → If + had + V3, would have + V3. Will и would для будущего и «бы» ставь в часть без if. Исключение — вежливость и желание: If you'd like…, If you would wait here, please… — тут would значит «хочешь, будь добр», а не «бы».",
+  examples: [
+    { en: "If I **drink** coffee after six, I **can't sleep**.", ru: "Если я пью кофе после шести, то не могу уснуть." },
+    {
+      en: "If the train **is** on time, we'**ll get** there by noon.",
+      ru: "Если поезд придёт вовремя, мы будем там к полудню.",
+    },
+    { en: "**Will** you **call** me if your flight **is delayed**?", ru: "Позвонишь мне, если твой рейс задержат?" },
+    {
+      en: "We **won't release** the update unless all the tests **pass**.",
+      ru: "Мы выпустим обновление, только если пройдут все тесты.",
+    },
+    {
+      en: "If we **lived** closer to the office, we **wouldn't need** a car.",
+      ru: "Если бы мы жили ближе к офису, нам не нужна была бы машина.",
+    },
+    {
+      en: "What **would** you **do** if you **lost** your passport abroad?",
+      ru: "Что бы вы сделали, если бы потеряли паспорт за границей?",
+    },
+    {
+      en: "If my sister **were** here, she **would know** what to do.",
+      ru: "Если бы сестра была здесь, она бы знала, что делать.",
+    },
+    {
+      en: "If the taxi **hadn't been** late, we **wouldn't have missed** our flight.",
+      ru: "Если бы такси не опоздало, мы бы успели на самолёт.",
+    },
+    {
+      en: "She **would have passed** the interview if she **had prepared** better.",
+      ru: "Она бы прошла собеседование, если бы лучше подготовилась.",
+    },
+    {
+      en: "If she **had learned** English at school, she **wouldn't need** a tutor now.",
+      ru: "Если бы она учила английский в школе, сейчас ей не нужен был бы репетитор.",
+    },
+  ],
+  exercises: [
+    {
+      id: "cond-if-it-rains",
+      type: "choice",
+      prompt: "If it ___ on Saturday, we'll watch a film at home instead.",
+      options: ["will rain", "rains", "rained", "would rain"],
+      answer: 1,
+      rule: "Real future: If + present, will in the other part",
+      explain: "This can really happen, so it is the first conditional: present after if (rains), will in the other part.",
+      ruHint: "После if про будущее — present: If it rains, без will.",
+    },
+    {
+      id: "cond-no-will-after-if",
+      type: "errorTap",
+      sentence: "If the clients will like the design, we'll start next week.",
+      wrong: 3,
+      correct: "If the clients like the design, we'll start next week.",
+      rule: "No will after if: If + present for the future",
+      explain: "In the if-part English uses present simple for the future: if the clients like. Will goes only in the main part.",
+      ruHint: "«Если понравится» — всё равно present: if they like.",
+    },
+    {
+      id: "cond-if-we-had-flat",
+      type: "fill",
+      before: "If we ",
+      after: " a bigger flat, we would invite you to stay with us.",
+      answers: ["had"],
+      base: "have",
+      rule: "Unreal now: If + past, would + V1",
+      explain: "We don't have a bigger flat now, so this is unreal: past after if (had), would in the other part.",
+      ruHint: "«Если бы у нас была квартира побольше» — If we had, а не If we would have.",
+    },
+    {
+      id: "cond-if-i-were-you",
+      type: "choice",
+      prompt: "If I ___ you, I'd talk to the team lead first.",
+      options: ["am", "would be", "were", "will be"],
+      answer: 2,
+      rule: "Advice: If I were you, I'd + V1",
+      explain: "You can't be the other person, so this is unreal: If I were you. Were works for all persons here; was is informal.",
+      ruHint: "«На твоём месте» = If I were you.",
+    },
+    {
+      id: "cond-would-have-caught",
+      type: "fill",
+      before: "If we had left ten minutes earlier, we ",
+      after: " the train.",
+      answers: ["would have caught", "could have caught", "might have caught"],
+      base: "catch",
+      rule: "Unreal past: If + had + V3, would have + V3",
+      explain: "We didn't leave earlier, so this is an unreal past: would have + V3 (caught). Could have or might have caught also work if you are less sure.",
+      ruHint: "«Успели бы» про прошлое — would have caught.",
+    },
+    {
+      id: "cond-if-i-had-known",
+      type: "choice",
+      prompt: "Nobody told me about the party. If I ___ about it, I would have come.",
+      options: ["knew", "have known", "had known", "would know"],
+      answer: 2,
+      rule: "Past situation: If + had + V3, not If + past",
+      explain: "The party is in the past, so the if-part needs had + V3: had known. 'If I knew' would be about now.",
+      ruHint: "«Если бы» про прошлое — If I had known, а не If I knew.",
+    },
+    {
+      id: "cond-would-have-called",
+      type: "reorder",
+      words: ["I", "would", "have", "called", "you", "if", "I", "had", "known"],
+      alt: [["if", "I", "had", "known", "I", "would", "have", "called", "you"]],
+      rule: "Third conditional: would have + V3 + if + had + V3",
+      explain: "Unreal past: would have + V3 in the main part, had + V3 after if. Either part can come first.",
+      ruHint: "Третий тип: would have called + if I had known.",
+    },
+    {
+      id: "cond-mixed-would-speak",
+      type: "choice",
+      prompt: "If she had moved to London, she ___ English much better now.",
+      options: ["would have spoken", "would speak", "will speak", "spoke"],
+      answer: 1,
+      rule: "Past condition, result now → would + V1",
+      explain: "The condition is in the past (had moved), but 'now' shows the result is in the present, so use would + V1: would speak.",
+      ruHint: "Условие в прошлом, результат сейчас — смешанный тип: would speak.",
+    },
+  ],
+} satisfies TenseRefInput;

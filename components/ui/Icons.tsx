@@ -153,3 +153,10 @@ export const BookIcon = (p: IconProps) => (
     <path d="M12 6.5v14" />
   </Svg>
 );
+
+export const ClockIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="8.25" />
+    <path d="M12 7.5V12l3 2" />
+  </Svg>
+);
