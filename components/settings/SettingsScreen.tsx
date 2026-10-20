@@ -13,6 +13,7 @@ import { aiEnabled } from "@/lib/ai";
 import { signIn, signOut, useCloud } from "@/lib/cloud";
 import { downloadForOffline, offlineStatus, type OfflineStatus } from "@/lib/offline";
 import { actions, useAppState, useHydrated } from "@/lib/store";
+import { ResetAll, ResetDay } from "./ResetProgress";
 import type { ThemePref } from "@/types/state";
 
 /** The natural voice every lesson line is recorded with. */
@@ -169,7 +170,6 @@ function SettingsBody() {
   const support = useSpeechSupport();
   const { voices, ready } = useVoices();
   const { speak } = useSpeech();
-  const [confirmReset, setConfirmReset] = useState(false);
   const natural = Boolean(settings.neuralVoice) && aiEnabled();
   const rateValue = RATES.reduce((best, r) =>
     Math.abs(Number(r.value) - settings.rate) < Math.abs(Number(best.value) - settings.rate) ? r : best,
@@ -302,31 +302,8 @@ function SettingsBody() {
 
       <Group title="Progress">
         <OfflineRow />
-        <div className="border-t border-line p-4 first:border-t-0">
-          {!confirmReset ? (
-            <Button variant="quiet" size="md" onClick={() => setConfirmReset(true)} className="-ml-3">
-              Start the course over
-            </Button>
-          ) : (
-            <div>
-              <p className="text-base text-text">This clears days, cards and mistakes on this device. Settings stay.</p>
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <Button variant="secondary" size="md" onClick={() => setConfirmReset(false)}>
-                  Keep progress
-                </Button>
-                <Button
-                  size="md"
-                  onClick={() => {
-                    actions.reset();
-                    setConfirmReset(false);
-                  }}
-                >
-                  Clear it
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
+        <ResetDay />
+        <ResetAll />
       </Group>
 
       <div className="mt-10">

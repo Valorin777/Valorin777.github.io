@@ -5,6 +5,8 @@ import {
   initialState,
   migrate,
   recordAnswer,
+  resetDay,
+  resetProgress,
   reviewCard,
   setDiagnostic,
   setFinalTest,
@@ -277,6 +279,86 @@ describe("mergeStates", () => {
     const m = mergeStates(initialState(), { ...initialState(), cards: evil });
     expect(Object.getPrototypeOf(m.cards)).toBe(Object.prototype);
     expect((m.cards as Record<string, unknown>).polluted).toBeUndefined();
+  });
+});
+
+describe("mergeStates after starting over", () => {
+  const RESET = at(12);
+
+  it("a reset survives the stale cloud copy, in both directions", () => {
+    const old = mergeStates(phone(), laptop());
+    const fresh = touch(resetProgress(old, RESET), RESET);
+    for (const merged of [mergeStates(fresh, old), mergeStates(old, fresh)]) {
+      expect(isEmptyProgress(merged)).toBe(true);
+      expect(merged.streak).toEqual(initialState().streak);
+      expect(merged.position).toBeNull();
+      expect(merged.resetAt).toBe(RESET);
+      expect(merged.settings).toEqual(fresh.settings);
+    }
+  });
+
+  it("a device that has not seen the reset gives up its data; new progress after the reset is kept", () => {
+    const old = phone();
+    let fresh = touch(resetProgress(old, RESET), RESET);
+    fresh = completeStep(fresh, 1, "be:rule:0", "be:rule:1", at(12, 5));
+    fresh = recordAnswer(fresh, answer({ key: "new-1", nowIso: at(12, 6) }));
+    fresh = touch(fresh, at(12, 6));
+    // The stale device even made progress later, without syncing first: the reset still wins.
+    const stale = touch(recordAnswer(laptop(), answer({ key: "late-1", nowIso: at(13) })), at(13));
+    const merged = mergeStates(stale, fresh);
+    expect(merged.days[1]?.doneSteps).toEqual(["be:rule:0"]);
+    expect(Object.keys(merged.errors)).toEqual(["new-1"]);
+    expect(merged.days[2]).toBeUndefined();
+    // Settings are not progress: the newer copy's settings still win.
+    expect(merged.settings.theme).toBe(stale.settings.theme);
+    expect(mergeStates(merged, stale)).toEqual(merged);
+  });
+
+  it("an older reset never clears progress made after it", () => {
+    const first = touch(resetProgress(phone(), at(7)), at(7));
+    const later = touch(completeStep(first, 1, "be:rule:0", "be:rule:1", at(8)), at(8));
+    const merged = mergeStates(first, later);
+    expect(merged.days[1]?.doneSteps).toEqual(["be:rule:0"]);
+    expect(mergeStates(later, first)).toEqual(merged);
+  });
+
+  it("one day started over stays fresh; other days still merge", () => {
+    const old = mergeStates(phone(), laptop());
+    const fresh = touch(resetDay(old, 1, RESET), RESET);
+    for (const merged of [mergeStates(fresh, old), mergeStates(old, fresh)]) {
+      expect(merged.days[1]).toBeUndefined();
+      expect(Object.values(merged.errors).filter((e) => e.day === 1)).toEqual([]);
+      expect(Object.values(merged.cards).filter((c) => c.day === 1)).toEqual([]);
+      expect(merged.days[2]?.doneSteps).toEqual(old.days[2]?.doneSteps);
+      expect(merged.dayResets).toEqual({ 1: RESET });
+    }
+  });
+
+  it("a whole reset after a day reset wins; a day reset after a whole reset is kept", () => {
+    const old = mergeStates(phone(), laptop());
+    const dayOnly = touch(resetDay(old, 2, at(12)), at(12));
+    const whole = touch(resetProgress(dayOnly, at(13)), at(13));
+    const merged = mergeStates(dayOnly, whole);
+    expect(isEmptyProgress(merged)).toBe(true);
+    expect(merged.dayResets).toEqual({});
+
+    let again = completeStep(whole, 1, "be:rule:0", "be:rule:1", at(14));
+    again = touch(resetDay(again, 1, at(15)), at(15));
+    const both = mergeStates(whole, again);
+    expect(both.days[1]).toBeUndefined();
+    expect(both.dayResets).toEqual({ 1: at(15) });
+    expect(both.resetAt).toBe(at(13));
+  });
+
+  it("merge(x, x) is x with reset times, and copies from older app versions merge", () => {
+    const fresh = touch(resetDay(touch(resetProgress(phone(), at(7)), at(7)), 1, at(8)), at(8));
+    expect(mergeStates(fresh, fresh)).toEqual(fresh);
+    const legacy = { ...laptop() } as Partial<AppState>;
+    delete legacy.resetAt;
+    delete legacy.dayResets;
+    const merged = mergeStates(fresh, legacy as AppState);
+    expect(merged.resetAt).toBe(at(7));
+    expect(isEmptyProgress(merged)).toBe(true);
   });
 });
 

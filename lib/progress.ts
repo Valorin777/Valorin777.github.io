@@ -58,6 +58,8 @@ export function initialState(): AppState {
     cards: {},
     errors: {},
     streak: { current: 0, best: 0, lastDay: null },
+    resetAt: null,
+    dayResets: {},
   };
 }
 
@@ -79,6 +81,12 @@ const int = (v: unknown, min: number, fallback: number): number => {
   return n === undefined ? fallback : Math.max(min, Math.floor(n));
 };
 const isDayNumber = (n: number): boolean => Number.isInteger(n) && n >= DAY_MIN && n <= DAY_MAX;
+/**
+ * Progress, cards and mistakes may also belong to day 0: practice outside the seven days (the
+ * coach, the tense reference).
+ */
+export const PRACTICE_DAY = 0;
+const isProgressDay = (n: number): boolean => Number.isInteger(n) && n >= PRACTICE_DAY && n <= DAY_MAX;
 const UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 const entries = (v: unknown): [string, unknown][] =>
   isObj(v) ? Object.entries(v).filter(([k]) => !UNSAFE_KEYS.has(k)) : [];
@@ -155,7 +163,7 @@ function migrateCard(id: string, raw: unknown): Card | null {
     back,
     category: cat,
     source,
-    day: day !== undefined && isDayNumber(day) ? day : DAY_MIN,
+    day: day !== undefined && isProgressDay(day) ? day : DAY_MIN,
     createdAt,
     ef: ef === undefined ? 2.5 : Math.max(MIN_EF, ef),
     interval: int(raw.interval, 0, 0),
@@ -182,7 +190,7 @@ function migrateError(key: string, raw: unknown): ErrorEntry | null {
   return {
     key,
     category: cat,
-    day: day !== undefined && isDayNumber(day) ? day : DAY_MIN,
+    day: day !== undefined && isProgressDay(day) ? day : DAY_MIN,
     prompt,
     wrong: str(raw.wrong) ?? "",
     right,
@@ -246,6 +254,12 @@ function migrateStreak(raw: unknown): Streak {
 }
 
 /** Reads whatever was stored (any version, partial or corrupt) into a valid AppState. Never throws. */
+/** A valid ISO time, else null. */
+function isoText(v: unknown): string | null {
+  const t = text(v);
+  return t && !Number.isNaN(Date.parse(t)) ? t : null;
+}
+
 export function migrate(raw: unknown): AppState {
   try {
     let data = raw;
@@ -266,7 +280,7 @@ export function migrate(raw: unknown): AppState {
     state.position = migratePosition(data.position);
     for (const [key, value] of entries(data.days)) {
       const n = Number(key);
-      const day = isDayNumber(n) ? migrateDay(value) : null;
+      const day = isProgressDay(n) ? migrateDay(value) : null;
       if (day) state.days[n] = day;
     }
     for (const [key, value] of entries(data.cards)) {
@@ -278,6 +292,12 @@ export function migrate(raw: unknown): AppState {
       if (entry) state.errors[key] = entry;
     }
     state.streak = migrateStreak(data.streak);
+    state.resetAt = isoText(data.resetAt);
+    for (const [key, value] of entries(data.dayResets)) {
+      const n = Number(key);
+      const at = isoText(value);
+      if (isProgressDay(n) && at) state.dayResets[n] = at;
+    }
     return state;
   } catch {
     return initialState();
@@ -512,8 +532,55 @@ export function updateSettings(s: AppState, patch: Partial<Settings>): AppState 
   return { ...s, settings: sanitizeSettings({ ...s.settings, ...defined }, s.settings) };
 }
 
-export function resetProgress(s: AppState): AppState {
-  return { ...initialState(), settings: { ...s.settings } };
+/**
+ * Starts the whole course over: every day, card, mistake, the level check, the Day 7 result,
+ * practice outside the days (coach, tenses) and the streak. Settings stay. The reset time makes
+ * older copies (the cloud, other devices) give up their data on the next merge.
+ */
+export function resetProgress(s: AppState, nowIso: string): AppState {
+  return { ...initialState(), updatedAt: s.updatedAt, settings: { ...s.settings }, resetAt: nowIso };
+}
+
+/** True when the day has anything to start over (progress, cards, mistakes, a Day 7 result). */
+export function dayHasProgress(s: AppState, day: number): boolean {
+  const p = s.days[day];
+  if (p && (p.doneSteps.length > 0 || Object.keys(p.answers).length > 0 || p.startedAt || p.completedAt)) return true;
+  if (day === DAY_MAX && s.finalTest) return true;
+  return Object.values(s.cards).some((c) => c.day === day) || Object.values(s.errors).some((e) => e.day === day);
+}
+
+/**
+ * Removes one day's learning data: its steps and answers, the cards and mistakes it created, the
+ * saved position inside it and, for Day 7, the test result. Used by resetDay and by the merge.
+ */
+export function withoutDay(s: AppState, day: number): AppState {
+  const days = { ...s.days };
+  delete days[day];
+  const cards = Object.fromEntries(Object.entries(s.cards).filter(([, c]) => c.day !== day));
+  const errors = Object.fromEntries(Object.entries(s.errors).filter(([, e]) => e.day !== day));
+  return {
+    ...s,
+    days,
+    cards,
+    errors,
+    position: s.position?.day === day ? null : s.position,
+    finalTest: day === DAY_MAX ? null : s.finalTest,
+  };
+}
+
+/**
+ * Starts one day over from its first step. Later days the learner had already opened stay open
+ * (they would otherwise lock behind the day being redone).
+ */
+export function resetDay(s: AppState, day: number, nowIso: string): AppState {
+  if (!isProgressDay(day)) return s;
+  const next = withoutDay(s, day);
+  const days = { ...next.days };
+  for (const [key, p] of Object.entries(days)) {
+    const n = Number(key);
+    if (n > day && n <= DAY_MAX && (p.doneSteps.length > 0 || p.startedAt) && !p.override) days[n] = { ...p, override: true };
+  }
+  return { ...next, days, dayResets: { ...s.dayResets, [day]: nowIso } };
 }
 
 /* ----------------------------------------------------------------- mastery */

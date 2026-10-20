@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { loadFirebase, type FirebaseKit } from "@/lib/firebase";
-import { mergeStates } from "@/lib/sync";
+import { migrate } from "@/lib/progress";
+import { mergeStates, missesResets } from "@/lib/sync";
 import { getState, replaceState, subscribe as subscribeStore } from "@/lib/store";
 import type { AppState } from "@/types/state";
 
@@ -61,14 +62,23 @@ function split(s: AppState): Record<Part, Record<string, unknown>> {
 
 function join(parts: Partial<Record<Part, Record<string, unknown>>>): AppState | null {
   if (!parts.core) return null;
-  return {
-    ...(parts.core as unknown as Omit<AppState, "cards" | "errors">),
-    cards: ((parts.cards?.cards as AppState["cards"] | undefined) ?? {}),
-    errors: ((parts.errors?.errors as AppState["errors"] | undefined) ?? {}),
-  } as AppState;
+  // Validated like local storage: older app versions wrote no reset times, and a hand-edited
+  // or half-written document must not break the merge.
+  return migrate({ ...parts.core, cards: parts.cards?.cards ?? {}, errors: parts.errors?.errors ?? {} });
 }
 
 let stopSync: (() => void) | null = null;
+let flushNow: (() => Promise<void>) | null = null;
+
+/**
+ * Writes the local state to the cloud now instead of after the usual short delay. Call it after
+ * starting over, so closing the tab right away cannot leave the old progress in the account.
+ */
+export function flushCloud(timeoutMs = 2500): Promise<void> {
+  if (!flushNow) return Promise.resolve();
+  // Offline, Firestore only resolves once the server has the write: never block the screen on it.
+  return Promise.race([flushNow(), new Promise<void>((resolve) => setTimeout(resolve, timeoutMs))]);
+}
 
 function errorMessage(e: unknown): string {
   const code = typeof e === "object" && e && "code" in e ? String((e as { code: unknown }).code) : "";
@@ -128,6 +138,12 @@ async function startSync(k: FirebaseKit, uid: string) {
       if (!fromCloud) return;
       const merged = mergeStates(getState(), fromCloud);
       if (JSON.stringify(merged) !== JSON.stringify(getState())) replaceState(merged);
+      // Another device overwrote the cloud with a copy from before a reset: put the reset back.
+      if (missesResets(fromCloud, merged)) {
+        writeAll(merged).catch((e: unknown) =>
+          set({ status: navigator.onLine ? "error" : "offline", problem: errorMessage(e) || null }),
+        );
+      }
       set({ status: "synced", lastSyncAt: new Date().toISOString() });
     }),
   );
@@ -146,12 +162,29 @@ async function startSync(k: FirebaseKit, uid: string) {
   const onOnline = () => writeAll(getState()).catch(() => undefined);
   window.addEventListener("online", onOnline);
 
+  flushNow = async () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    await writeAll(getState()).catch((e: unknown) =>
+      set({ status: navigator.onLine ? "error" : "offline", problem: errorMessage(e) || null }),
+    );
+  };
+  // Leaving the page with a write still waiting: send it now, not never.
+  const onHide = (e: Event) => {
+    if (timer && (e.type === "pagehide" || document.visibilityState === "hidden")) void flushNow?.();
+  };
+  document.addEventListener("visibilitychange", onHide);
+  window.addEventListener("pagehide", onHide);
+
   stopSync = () => {
     unsubs.forEach((u) => u());
     unsubStore();
     window.removeEventListener("online", onOnline);
+    document.removeEventListener("visibilitychange", onHide);
+    window.removeEventListener("pagehide", onHide);
     if (timer) clearTimeout(timer);
     stopSync = null;
+    flushNow = null;
   };
 }
 

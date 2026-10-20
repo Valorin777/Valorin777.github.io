@@ -152,4 +152,11 @@ export interface AppState {
   cards: Record<string, Card>;
   errors: Record<string, ErrorEntry>;
   streak: Streak;
+  /**
+   * When the learner last started the whole course over (ISO). On a merge, the side with an
+   * older reset (another device, the cloud copy) loses all its learning data.
+   */
+  resetAt: string | null;
+  /** When each day was last started over (ISO), by day number; same rule, for that day only. */
+  dayResets: Record<number, string>;
 }

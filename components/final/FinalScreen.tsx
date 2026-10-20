@@ -21,8 +21,9 @@ import { topErrors } from "@/lib/progress";
 import { actions, getState, useAppState } from "@/lib/store";
 import type { FinalTestResult } from "@/types/state";
 import { ChoiceClozeStep, OpenClozeStep, type ClozeAnswers } from "./Cloze";
+import { FINAL_DRAFT_KEY } from "@/lib/constants";
 
-const DRAFT_KEY = "b2sprint:final-draft";
+const DRAFT_KEY = FINAL_DRAFT_KEY;
 
 type FinalStep =
   | { id: "intro"; kind: "intro" }

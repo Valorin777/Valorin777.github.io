@@ -14,6 +14,8 @@ import {
   migrate,
   phraseCardId,
   recordAnswer,
+  dayHasProgress,
+  resetDay,
   resetProgress,
   reviewCard,
   setDiagnostic,
@@ -442,10 +444,67 @@ describe("reset, mastery and top errors", () => {
     s = recordAnswer(s, wrong());
     s = touchStreak(s, D0);
     s = setDiagnostic(setFinalTest(s, FINAL), DIAG);
-    const r = resetProgress(s);
+    s = recordAnswer(s, wrong({ day: 0, key: "tense-past-simple-x" }));
+    s = resetDay(s, 2, T1);
+    const r = resetProgress(s, T2);
     expect(r.diagnostic).toBeNull();
     expect(r.finalTest).toBeNull();
-    expect(r).toEqual({ ...initialState(), settings: { ...DEFAULT_SETTINGS, theme: "dark" } });
+    expect(r).toEqual({
+      ...initialState(),
+      updatedAt: s.updatedAt,
+      settings: { ...DEFAULT_SETTINGS, theme: "dark" },
+      resetAt: T2,
+    });
+  });
+
+  it("starts one day over: its steps, answers, cards, mistakes and position; later days stay open", () => {
+    let s = initialState();
+    s = completeStep(s, 1, "a:rule:0", "a:rule:1", T1);
+    s = recordAnswer(s, wrong());
+    s = addPhraseCards(s, 1, [{ en: "make a decision", ru: "принять решение", category: "collocations" }], D0, T1);
+    s = completeStep(s, 2, "b:rule:0", "b:rule:1", T1);
+    s = recordAnswer(s, wrong({ day: 2, key: "pp-2", category: "perfect" }));
+    s = recordAnswer(s, wrong({ day: 0, key: "tense-x", category: "perfect" }));
+    s = setPosition(s, 1, "a:rule:1");
+    s = touchStreak(s, D0);
+    expect(dayHasProgress(s, 1)).toBe(true);
+
+    const r = resetDay(s, 1, T2);
+    expect(r.days[1]).toBeUndefined();
+    expect(Object.values(r.cards).filter((c) => c.day === 1)).toEqual([]);
+    expect(Object.values(r.errors).filter((e) => e.day === 1)).toEqual([]);
+    expect(r.position).toBeNull();
+    expect(r.dayResets).toEqual({ 1: T2 });
+    expect(dayHasProgress(r, 1)).toBe(false);
+    // Day 2 and the practice day are untouched; Day 2 stays unlocked although Day 1 is redone.
+    expect(r.days[2]?.doneSteps).toEqual(["b:rule:0"]);
+    expect(r.days[2]?.override).toBe(true);
+    expect(isDayUnlocked(r, 2)).toBe(true);
+    expect(r.errors["pp-2"]).toBeDefined();
+    expect(r.errors["tense-x"]?.day).toBe(0);
+    expect(r.streak).toEqual(s.streak);
+  });
+
+  it("starting Day 7 over clears the test result", () => {
+    let s = setFinalTest(initialState(), FINAL);
+    expect(dayHasProgress(s, 7)).toBe(true);
+    s = resetDay(s, 7, T2);
+    expect(s.finalTest).toBeNull();
+    expect(dayHasProgress(s, 7)).toBe(false);
+  });
+
+  it("keeps practice outside the days (day 0) and reset times through a reload", () => {
+    let s = recordAnswer(initialState(), wrong({ day: 0, key: "tense-present-perfect-x", correct: true }));
+    s = recordAnswer(s, wrong({ day: 0, key: "coach:i-was-went" }));
+    s = resetDay(s, 3, T1);
+    s = { ...s, resetAt: T2 };
+    const back = migrate(JSON.parse(JSON.stringify(s)));
+    expect(back.days[0]?.answers["tense-present-perfect-x"]?.correct).toBe(true);
+    expect(back.errors["coach:i-was-went"]?.day).toBe(0);
+    expect(back.cards["m:coach:i-was-went"]?.day).toBe(0);
+    expect(back.dayResets).toEqual({ 3: T1 });
+    expect(back.resetAt).toBe(T2);
+    expect(migrate({ ...s, resetAt: "not a date", dayResets: { 9: T1, x: T1, 2: 5 } }).dayResets).toEqual({});
   });
 
   it("computes first-try mastery per topic", () => {

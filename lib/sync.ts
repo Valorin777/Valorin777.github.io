@@ -8,11 +8,18 @@ import type {
   FinalTestResult,
   Streak,
 } from "@/types/state";
+import { initialState, withoutDay } from "@/lib/progress";
 
 /**
  * Merging the local state with the cloud copy. Pure and deterministic: merge(x, x) equals x,
  * and swapping the arguments gives the same data except where two values tie exactly (then
  * the first argument wins) and the order of doneSteps.
+ *
+ * Progress only ever grows in a merge (a union), so starting over is recorded as a time:
+ * resetAt for the whole course, dayResets[n] for one day. A copy that has not seen the latest
+ * reset gives up the data that reset cleared before the union, so the cloud or another device
+ * cannot bring it back. Progress made on such a copy after the reset is lost too: starting over
+ * wins.
  */
 
 const timeOf = (iso: string): number => {
@@ -103,7 +110,43 @@ function mergeRecords<T>(a: Record<string, T>, b: Record<string, T>, pick: (x: T
   return out;
 }
 
-export function mergeStates(a: AppState, b: AppState): AppState {
+/** The later of two optional ISO times. */
+const latest = (x: string | null | undefined, y: string | null | undefined): string | null =>
+  !x ? (y ?? null) : !y ? x : cmpTime(y, x) > 0 ? y : x;
+
+/** Everything a whole-course reset clears; settings, updatedAt and the reset time stay. */
+function withoutProgress(s: AppState): AppState {
+  const empty = initialState();
+  return { ...empty, version: s.version, updatedAt: s.updatedAt, settings: s.settings, resetAt: s.resetAt };
+}
+
+/** Drops what this copy holds from before resets it has not seen yet (dayResets are all newer than resetAt). */
+function catchUp(s: AppState, resetAt: string | null, dayResets: Record<number, string>): AppState {
+  let out = s;
+  if (resetAt && (!s.resetAt || cmpTime(s.resetAt, resetAt) < 0)) out = withoutProgress(out);
+  for (const [key, at] of Object.entries(dayResets)) {
+    const day = Number(key);
+    const mine = out.dayResets?.[day];
+    if (!mine || cmpTime(mine, at) < 0) out = withoutDay(out, day);
+  }
+  return out;
+}
+
+export function mergeStates(local: AppState, remote: AppState): AppState {
+  // Copies written by older versions of the app have no reset times.
+  const resetAt = latest(local.resetAt, remote.resetAt);
+  const dayResets: Record<number, string> = { ...(local.dayResets ?? {}) };
+  for (const [key, at] of Object.entries(remote.dayResets ?? {})) {
+    const day = Number(key);
+    const kept = latest(dayResets[day], at);
+    if (kept) dayResets[day] = kept;
+  }
+  // Day resets older than the whole reset are history.
+  for (const [key, at] of Object.entries(dayResets)) {
+    if (resetAt && cmpTime(at, resetAt) <= 0) delete dayResets[Number(key)];
+  }
+  const a = catchUp(local, resetAt, dayResets);
+  const b = catchUp(remote, resetAt, dayResets);
   const newer = cmpTime(b.updatedAt, a.updatedAt) > 0 ? b : a;
   const days: Record<number, DayProgress> = { ...a.days };
   for (const [key, day] of Object.entries(b.days)) {
@@ -122,7 +165,21 @@ export function mergeStates(a: AppState, b: AppState): AppState {
     cards: mergeRecords(a.cards, b.cards, pickCard),
     errors: mergeRecords(a.errors, b.errors, mergeError),
     streak: mergeStreak(a.streak, b.streak),
+    resetAt,
+    dayResets,
   };
+}
+
+/**
+ * True when a copy (the cloud) has not recorded a reset that the merged state has: it must be
+ * written back at once, or a stale device that overwrote it would keep bringing old progress back.
+ */
+export function missesResets(copy: AppState, merged: AppState): boolean {
+  if (merged.resetAt && (!copy.resetAt || cmpTime(copy.resetAt, merged.resetAt) < 0)) return true;
+  return Object.entries(merged.dayResets ?? {}).some(([day, at]) => {
+    const theirs = copy.dayResets?.[Number(day)];
+    return !theirs || cmpTime(theirs, at) < 0;
+  });
 }
 
 /** True when there is no learning data at all (settings, position and streak do not count). */

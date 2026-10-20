@@ -8,6 +8,7 @@ import {
   initialState,
   migrate,
   recordAnswer,
+  resetDay,
   resetProgress,
   reviewCard,
   setDiagnostic,
@@ -28,7 +29,7 @@ import type { AppState, DiagnosticResult, FinalTestResult, Settings } from "@/ty
  * mirror behind the same actions, so components never change.
  */
 
-import { STORAGE_KEY } from "@/lib/constants";
+import { FINAL_DRAFT_KEY, STORAGE_KEY } from "@/lib/constants";
 export { STORAGE_KEY };
 
 const SERVER_STATE: AppState = initialState();
@@ -64,6 +65,15 @@ function emit() {
 export function getState(): AppState {
   if (!loaded && typeof window !== "undefined") load();
   return state;
+}
+
+/** The Day 7 test draft lives next to the state; starting over must not bring old answers back. */
+function forgetFinalDraft() {
+  try {
+    window.localStorage.removeItem(FINAL_DRAFT_KEY);
+  } catch {
+    // no storage
+  }
 }
 
 function update(fn: (s: AppState) => AppState) {
@@ -173,7 +183,14 @@ export const actions = {
   setOverride(day: number) {
     update((s) => setOverride(s, day));
   },
+  /** Starts the whole course over (see resetProgress). */
   reset() {
-    update((s) => resetProgress(s));
+    update((s) => resetProgress(s, new Date().toISOString()));
+    forgetFinalDraft();
+  },
+  /** Starts one day over from its first step (see resetDay). */
+  resetDay(day: number) {
+    update((s) => resetDay(s, day, new Date().toISOString()));
+    if (day === 7) forgetFinalDraft();
   },
 };
