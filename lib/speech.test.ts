@@ -4,7 +4,9 @@ import { playCue } from "@/lib/sound";
 import {
   clampRate,
   collectTranscripts,
+  createVoiceDetector,
   getSupport,
+  levelOfFloat,
   listen,
   loadVoices,
   mapRecognitionError,
@@ -308,6 +310,27 @@ describe("helpers", () => {
   });
 });
 
+describe("createVoiceDetector", () => {
+  it("adapts the voice threshold to the room's noise floor", () => {
+    const quiet = createVoiceDetector();
+    expect(quiet.push(0.3).voiced).toBe(true); // speaking straight away still counts
+    for (let i = 0; i < 20; i++) quiet.push(0.002);
+    expect(quiet.push(0.012).voiced).toBe(true); // a quiet mic in a quiet room
+    expect(quiet.push(0.008).voiced).toBe(false);
+
+    const noisy = createVoiceDetector();
+    for (let i = 0; i < 20; i++) noisy.push(0.02);
+    expect(noisy.push(0.025).voiced).toBe(false); // the room itself
+    expect(noisy.push(0.08).voiced).toBe(true); // a voice over it
+    expect(noisy.push(0.025).threshold).toBeCloseTo(0.06);
+  });
+
+  it("levelOfFloat is the RMS of float samples", () => {
+    expect(levelOfFloat(new Float32Array([0.5, -0.5, 0.5, -0.5]))).toBeCloseTo(0.5);
+    expect(levelOfFloat(new Float32Array(0))).toBe(0);
+  });
+});
+
 describe("SSR / unsupported environment (node)", () => {
   it("reports no support and never throws", async () => {
     expect(getSupport()).toEqual({ tts: false, recognition: false });
@@ -586,6 +609,46 @@ describe("with mocked Web Speech", () => {
     stop("abort");
     stop("abort");
     expect(second).toEqual(["end"]);
+  });
+
+  it("listen: once the learner speaks, the waiting timeout no longer cuts them off", () => {
+    const events: string[] = [];
+    const phases: string[] = [];
+    listen({
+      timeoutMs: 3000,
+      maxMs: 10_000,
+      onPhase: (p) => phases.push(p),
+      onResult: (alts) => events.push(`result:${alts[0]}`),
+      onEnd: () => events.push("end"),
+    });
+    const rec = FakeRecognition.instances[0];
+    vi.advanceTimersByTime(2000);
+    rec?.emit({ isFinal: false, alts: ["I have been"] });
+    expect(phases).toEqual(["waiting", "hearing"]);
+    for (let i = 0; i < 4; i++) {
+      vi.advanceTimersByTime(1000);
+      rec?.emit({ isFinal: false, alts: ["I have been working here"] });
+    }
+    expect(rec?.calls).toEqual(["start"]);
+    vi.advanceTimersByTime(2500);
+    expect(rec?.calls).toContain("stop");
+  });
+
+  it("listen (long, no recorder): continuous Web Speech that waits through a pause", () => {
+    const events: string[] = [];
+    listen({ long: true, onResult: (alts) => events.push(`result:${alts[0]}`), onEnd: () => events.push("end") });
+    const rec = FakeRecognition.instances[0];
+    expect(rec?.continuous).toBe(true);
+    rec?.emit({ isFinal: true, alts: ["I went to Kazan"] });
+    // A final segment is not the end of a long answer.
+    expect(events).toEqual([]);
+    vi.advanceTimersByTime(2500);
+    expect(rec?.calls).toEqual(["start"]);
+    rec?.emit({ isFinal: true, alts: ["I went to Kazan"] }, { isFinal: true, alts: [" last summer"] });
+    vi.advanceTimersByTime(3300);
+    expect(rec?.calls).toContain("stop");
+    rec?.onend?.();
+    expect(events).toEqual(["result:I went to Kazan last summer", "end"]);
   });
 
   it("listen: timeout stops recognition gracefully", () => {
@@ -901,7 +964,7 @@ describe("natural voice and server recognition (AI enabled)", () => {
     expect(FakeAudioContext.instances[0]?.closed).toBe(true);
   });
 
-  it("stops recording after ~1.2 s of silence following speech", async () => {
+  it("stops recording after ~1.8 s of silence following speech", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
     const { speech, fetchMock } = await load(async () => json({ text: "I have known her" }), { webSpeech: false });
     const { events, listenOpts } = track();
@@ -912,13 +975,81 @@ describe("natural voice and server recognition (AI enabled)", () => {
     micLevel = 0.3;
     await vi.advanceTimersByTimeAsync(500);
     micLevel = 0.003;
-    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(1600);
     expect(recorder?.state).toBe("recording");
     await vi.advanceTimersByTimeAsync(300);
     expect(recorder?.state).toBe("inactive");
     expect(fetchMock).toHaveBeenCalledTimes(1);
     await vi.waitFor(() => expect(events).toContain("end"));
     expect(events).toEqual(["interim:…", "result:I have known her", "end"]);
+  });
+
+  it("a long answer keeps recording through thinking pauses; phases and levels are reported", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+    const { speech, fetchMock } = await load(async () => json({ text: "Well, I went there last year" }), { webSpeech: true });
+    const { events, listenOpts } = track();
+    const phases: string[] = [];
+    const levels: number[] = [];
+    speech.listen({
+      ...listenOpts,
+      long: true,
+      timeoutMs: 2000,
+      onPhase: (p) => phases.push(p),
+      onLevel: (l) => levels.push(l),
+    });
+    // Long answers are recorded even where Web Speech exists: it would stop at the first pause.
+    expect(FakeRecognition.instances).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(0);
+    const recorder = FakeRecorder.instances[0];
+    expect(phases).toEqual(["waiting"]);
+    // Silence first: still within the 2 s wait.
+    await vi.advanceTimersByTimeAsync(1500);
+    micLevel = 0.3; // "Well…"
+    await vi.advanceTimersByTimeAsync(500);
+    expect(phases).toEqual(["waiting", "hearing"]);
+    micLevel = 0; // thinking for 3 s: past the 2 s wait, but the learner already started
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(recorder?.state).toBe("recording");
+    micLevel = 0.3; // the rest of the answer
+    await vi.advanceTimersByTimeAsync(2000);
+    micLevel = 0;
+    await vi.advanceTimersByTimeAsync(2400);
+    expect(recorder?.state).toBe("recording");
+    await vi.advanceTimersByTimeAsync(300);
+    expect(recorder?.state).toBe("inactive");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(events).toContain("end"));
+    expect(phases).toEqual(["waiting", "hearing", "processing"]);
+    expect(events).toEqual(["interim:…", "result:Well, I went there last year", "end"]);
+    expect(Math.max(...levels)).toBe(1);
+    expect(Math.min(...levels)).toBe(0);
+  });
+
+  it("caps an answer at maxMs even while the learner keeps talking", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+    const { speech } = await load(async () => json({ text: "a very long story" }), { webSpeech: false });
+    const { events, listenOpts } = track();
+    speech.listen({ ...listenOpts, long: true, timeoutMs: 1000, maxMs: 5000 });
+    await vi.advanceTimersByTimeAsync(0);
+    micLevel = 0.3;
+    await vi.advanceTimersByTimeAsync(4900);
+    expect(FakeRecorder.instances[0]?.state).toBe("recording");
+    await vi.advanceTimersByTimeAsync(200);
+    expect(FakeRecorder.instances[0]?.state).toBe("inactive");
+    await vi.waitFor(() => expect(events).toContain("end"));
+    expect(events).toEqual(["interim:…", "result:a very long story", "end"]);
+  });
+
+  it("a noisy room is not mistaken for speech", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+    const { speech, fetchMock } = await load(async () => json({ text: "x" }), { webSpeech: false });
+    const { events, listenOpts } = track();
+    speech.listen({ ...listenOpts, long: true, timeoutMs: 3000 });
+    await vi.advanceTimersByTimeAsync(0);
+    micLevel = 0.025; // fan, traffic: steady, above the old fixed threshold
+    await vi.advanceTimersByTimeAsync(3100);
+    expect(events).toEqual(["error:no-speech", "end"]);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("only room noise until the timeout: no-speech without an upload", async () => {

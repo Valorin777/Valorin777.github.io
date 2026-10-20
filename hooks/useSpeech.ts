@@ -8,6 +8,7 @@ import {
   prefetchNeuralSpeech,
   speak as speakText,
   subscribeVoices,
+  type ListenPhase,
   type RecognitionError,
   type SpeechSupport,
   type StopListening,
@@ -151,15 +152,28 @@ export type ListenState = "idle" | "listening" | "done" | "error";
 
 interface RecognizerSnapshot {
   state: ListenState;
+  /** While listening: waiting for the first words, hearing them, or transcribing. */
+  phase: ListenPhase | null;
   interim: string;
   alternatives: string[] | null;
   error: RecognitionError | null;
 }
 
-const IDLE: RecognizerSnapshot = { state: "idle", interim: "", alternatives: null, error: null };
+const IDLE: RecognizerSnapshot = { state: "idle", phase: null, interim: "", alternatives: null, error: null };
+
+export interface RecognizerStartOptions {
+  lang?: string;
+  /** How long to wait for the first words. */
+  timeoutMs?: number;
+  maxMs?: number;
+  /** A conversation answer with pauses (see lib/speech ListenOptions.long). */
+  long?: boolean;
+}
 
 export interface Recognizer extends RecognizerSnapshot {
-  start: (opts?: { lang?: string; timeoutMs?: number }) => void;
+  start: (opts?: RecognizerStartOptions) => void;
+  /** The live mic level 0–1 (recording path), read by a meter on each frame; no re-renders. */
+  level: () => number;
   /** Finish now and still deliver what was heard. */
   stop: () => void;
   /** Abort and forget everything. */
@@ -170,6 +184,8 @@ export function useRecognizer(): Recognizer {
   const [snap, setSnap] = useState<RecognizerSnapshot>(IDLE);
   const stopRef = useRef<StopListening | null>(null);
   const tokenRef = useRef(0);
+  const levelRef = useRef(0);
+  const level = useCallback(() => levelRef.current, []);
 
   const abortCurrent = useCallback(() => {
     tokenRef.current += 1;
@@ -179,14 +195,23 @@ export function useRecognizer(): Recognizer {
   }, []);
 
   const start = useCallback(
-    (opts?: { lang?: string; timeoutMs?: number }) => {
+    (opts?: RecognizerStartOptions) => {
       abortCurrent();
       const token = tokenRef.current;
       const isCurrent = (): boolean => tokenRef.current === token;
-      setSnap({ state: "listening", interim: "", alternatives: null, error: null });
+      levelRef.current = 0;
+      setSnap({ state: "listening", phase: "waiting", interim: "", alternatives: null, error: null });
       stopRef.current = listen({
         lang: opts?.lang,
         timeoutMs: opts?.timeoutMs,
+        maxMs: opts?.maxMs,
+        long: opts?.long,
+        onPhase: (phase) => {
+          if (isCurrent()) setSnap((s) => (s.state === "listening" ? { ...s, phase } : s));
+        },
+        onLevel: (value) => {
+          if (isCurrent()) levelRef.current = value;
+        },
         onInterim: (text) => {
           if (isCurrent()) setSnap((s) => ({ ...s, interim: text }));
         },
@@ -199,7 +224,8 @@ export function useRecognizer(): Recognizer {
         onEnd: () => {
           if (!isCurrent()) return;
           stopRef.current = null;
-          setSnap((s) => (s.state === "listening" ? { ...s, state: "idle" } : s));
+          levelRef.current = 0;
+          setSnap((s) => ({ ...s, phase: null, ...(s.state === "listening" ? { state: "idle" as const } : {}) }));
         },
       });
     },
@@ -217,5 +243,5 @@ export function useRecognizer(): Recognizer {
 
   useEffect(() => abortCurrent, [abortCurrent]);
 
-  return { ...snap, start, stop, reset };
+  return { ...snap, start, stop, reset, level };
 }

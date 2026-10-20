@@ -749,13 +749,27 @@ export function collectTranscripts(results: RecognitionResultListLike): {
   return { transcript, alternatives, isFinal };
 }
 
+/** "waiting" for the first words, "hearing" them, "processing" the recording on the worker. */
+export type ListenPhase = "waiting" | "hearing" | "processing";
+
 export interface ListenOptions {
   lang?: string;
   onInterim?: (text: string) => void;
   onResult: (alternatives: string[]) => void;
   onError?: (e: RecognitionError) => void;
   onEnd?: () => void;
+  onPhase?: (phase: ListenPhase) => void;
+  /** Mic level 0–1 about ten times a second (recording path only). */
+  onLevel?: (level: number) => void;
+  /** How long to wait for the learner to start speaking. Once they speak, maxMs applies. */
   timeoutMs?: number;
+  /** Hard cap for one answer, from the start (default 30 s, 90 s when long). */
+  maxMs?: number;
+  /**
+   * A conversation answer: several sentences with thinking pauses. Records on the worker when
+   * it can (one stream, our own pause detection); else keeps Web Speech running through pauses.
+   */
+  long?: boolean;
 }
 
 /** "stop" (default) finishes gracefully and still delivers what was heard; "abort" drops it. */
@@ -769,13 +783,20 @@ let webSpeechBroken = false;
 
 /** Stops after this much silence once something was heard (Safari may never finalize). */
 const SILENCE_MS = 2500;
+/** The same for a conversation answer: room to think between sentences. */
+const LONG_SILENCE_MS = 3200;
 /** How long to wait for "end" after stop() before giving up on the browser. */
 const END_GRACE_MS = 1500;
 
+const positive = (n: number | undefined): n is number => typeof n === "number" && Number.isFinite(n) && n > 0;
+
 function listenTimeout(opts: ListenOptions): number {
-  return typeof opts.timeoutMs === "number" && Number.isFinite(opts.timeoutMs) && opts.timeoutMs > 0
-    ? opts.timeoutMs
-    : 8000;
+  return positive(opts.timeoutMs) ? opts.timeoutMs : 8000;
+}
+
+function listenMax(opts: ListenOptions): number {
+  const max = positive(opts.maxMs) ? opts.maxMs : opts.long ? 90_000 : 30_000;
+  return Math.max(max, listenTimeout(opts));
 }
 
 /**
@@ -786,7 +807,8 @@ function listenTimeout(opts: ListenOptions): number {
 export function listen(opts: ListenOptions): StopListening {
   const Ctor = getRecognitionCtor();
   const server = serverRecognitionAvailable();
-  if (server && (!Ctor || webSpeechBroken)) return listenServer(opts);
+  // A long answer is recorded in one piece: browsers end recognition at the first pause.
+  if (server && (!Ctor || webSpeechBroken || opts.long)) return listenServer(opts);
   if (!Ctor) {
     let ended = false;
     const finishUnsupported = (report: boolean): void => {
@@ -811,6 +833,9 @@ function listenWeb(opts: ListenOptions, Ctor: RecognitionCtor, serverFallback: b
   let rec: RecognitionLike | null = null;
   let delegate: StopListening | null = null;
   let lastAlternatives: string[] = [];
+  let hearing = false;
+  let startedAt = Date.now();
+  const silenceMs = opts.long ? LONG_SILENCE_MS : SILENCE_MS;
   let startTimer: ReturnType<typeof setTimeout> | null = null;
   let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
   let silenceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -930,7 +955,8 @@ function listenWeb(opts: ListenOptions, Ctor: RecognitionCtor, serverFallback: b
     rec.lang = opts.lang || "en-US";
     rec.interimResults = true;
     rec.maxAlternatives = 3;
-    rec.continuous = false;
+    // A long answer keeps the recognizer running through pauses; our silence timer ends it.
+    rec.continuous = Boolean(opts.long);
   } catch {
     rec = null;
     defer(() => {
@@ -946,15 +972,22 @@ function listenWeb(opts: ListenOptions, Ctor: RecognitionCtor, serverFallback: b
     if (transcript) {
       lastAlternatives = alternatives;
       safely(() => opts.onInterim?.(transcript));
+      if (!hearing) {
+        hearing = true;
+        safely(() => opts.onPhase?.("hearing"));
+        // The learner is talking: no more "waiting" deadline, only the overall cap.
+        if (timeoutTimer !== null) clearTimeout(timeoutTimer);
+        timeoutTimer = setTimeout(() => stop("stop"), Math.max(0, listenMax(opts) - (Date.now() - startedAt)));
+      }
     }
-    if (isFinal && alternatives.length) {
+    if (isFinal && alternatives.length && !opts.long) {
       deliver(alternatives);
       stop("stop");
       return;
     }
     if (transcript && !stopping) {
       if (silenceTimer !== null) clearTimeout(silenceTimer);
-      silenceTimer = setTimeout(() => stop("stop"), SILENCE_MS);
+      silenceTimer = setTimeout(() => stop("stop"), silenceMs);
     }
   };
   rec.onerror = (event) => {
@@ -989,6 +1022,8 @@ function listenWeb(opts: ListenOptions, Ctor: RecognitionCtor, serverFallback: b
       finish();
       return;
     }
+    startedAt = Date.now();
+    safely(() => opts.onPhase?.("waiting"));
     timeoutTimer = setTimeout(() => stop("stop"), timeoutMs);
   };
 
@@ -1029,6 +1064,7 @@ interface RecorderCtor {
 interface AnalyserLike {
   fftSize: number;
   getByteTimeDomainData(array: Uint8Array): void;
+  getFloatTimeDomainData?(array: Float32Array): void;
 }
 
 interface AudioContextLike {
@@ -1046,13 +1082,25 @@ interface MediaWindow {
 
 /** Chrome/Firefox record Opus in WebM; Safari only does MP4 (AAC). */
 const RECORDER_TYPES = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
-/** Stop after this much quiet once the learner has spoken. */
-const SERVER_SILENCE_MS = 1200;
 const LEVEL_TICK_MS = 100;
-/** RMS of the waveform (0–1) that counts as voice; room noise is ~0.002–0.01. */
-const SPEECH_LEVEL = 0.015;
-/** Ticks above SPEECH_LEVEL before the silence countdown may stop recording (ignores a click). */
-const SPEECH_TICKS = 2;
+/** Quiet that ends a one-sentence answer once the learner has spoken. */
+const SERVER_SILENCE_MS = 1800;
+/** Quiet that ends a conversation answer: room to think between sentences. */
+const SERVER_LONG_SILENCE_MS = 2600;
+/** After only a word or two ("well… um") the learner is still finding the sentence: wait longer. */
+const SERVER_HESITATION_MS = 3800;
+const HESITATION_VOICED_MS = 1200;
+/**
+ * Voice = RMS (0–1) well above the room's own noise. The noise floor is the quietest level of
+ * the last few seconds (speech always has gaps), so a quiet mic or a noisy room both work; a
+ * normal voice (above the cap) always counts, even from the very first moment.
+ */
+const NOISE_FACTOR = 3;
+const MIN_SPEECH_LEVEL = 0.01;
+const MAX_SPEECH_LEVEL = 0.06;
+const FLOOR_WINDOW_TICKS = 50;
+/** Ticks above the threshold before the answer counts as started (ignores a click). */
+const SPEECH_TICKS = 3;
 
 function mediaWindow(): MediaWindow | null {
   return typeof window === "undefined" ? null : (window as unknown as MediaWindow);
@@ -1121,9 +1169,40 @@ function recognitionLang(lang: string | undefined): "en" | "ru" {
   return (lang || "en").toLowerCase().startsWith("ru") ? "ru" : "en";
 }
 
+/** Root mean square of float PCM (-1…1), 0–1. */
+export function levelOfFloat(samples: Float32Array): number {
+  if (!samples.length) return 0;
+  let sum = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const x = samples[i] ?? 0;
+    sum += x * x;
+  }
+  return Math.min(1, Math.sqrt(sum / samples.length));
+}
+
 /**
- * Records until ~1.2 s of quiet after speech, stop() or timeoutMs, then transcribes on the
- * worker. Same contract as the Web Speech path; onInterim gets "…" while uploading.
+ * Tracks the room's noise floor and decides what counts as voice. Pure, so it is unit-tested
+ * with plain numbers.
+ */
+export function createVoiceDetector(): { push(level: number): { voiced: boolean; threshold: number } } {
+  const recent: number[] = [];
+  return {
+    push(level: number) {
+      // Exact zeros are a mic still warming up (or muted), not the room.
+      if (level > 0) recent.push(level);
+      if (recent.length > FLOOR_WINDOW_TICKS) recent.shift();
+      const floor = recent.length ? Math.min(...recent) : 0;
+      const threshold = Math.min(MAX_SPEECH_LEVEL, Math.max(MIN_SPEECH_LEVEL, floor * NOISE_FACTOR));
+      return { voiced: level >= threshold, threshold };
+    },
+  };
+}
+
+/**
+ * Records until the learner has spoken and gone quiet (about 2 s; longer for a conversation
+ * answer or after a hesitant start), stop(), the waiting timeout (nobody spoke) or the overall
+ * cap; then transcribes on the worker. Same contract as the Web Speech path; onInterim gets "…"
+ * while uploading.
  */
 function listenServer(opts: ListenOptions): StopListening {
   let ended = false;
@@ -1134,17 +1213,26 @@ function listenServer(opts: ListenOptions): StopListening {
   let recorder: RecorderLike | null = null;
   let context: AudioContextLike | null = null;
   let levelTimer: ReturnType<typeof setInterval> | null = null;
-  let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
-  let peak = 0;
+  let waitTimer: ReturnType<typeof setTimeout> | null = null;
+  let maxTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The level meter ran and saw a signal, so "nothing voiced" can be trusted. */
+  let meterWorked = false;
+  let voicedTicks = 0;
+  let spoke = false;
   let mimeType = "";
   const chunks: Blob[] = [];
   const upload = new AbortController();
   const handle = { abort: () => stop("abort") };
 
-  function releaseInput(): void {
+  function clearTimers(): void {
     if (levelTimer !== null) clearInterval(levelTimer);
-    if (timeoutTimer !== null) clearTimeout(timeoutTimer);
-    levelTimer = timeoutTimer = null;
+    if (waitTimer !== null) clearTimeout(waitTimer);
+    if (maxTimer !== null) clearTimeout(maxTimer);
+    levelTimer = waitTimer = maxTimer = null;
+  }
+
+  function releaseInput(): void {
+    clearTimers();
     if (recorder) {
       recorder.ondataavailable = null;
       recorder.onstop = null;
@@ -1196,13 +1284,13 @@ function listenServer(opts: ListenOptions): StopListening {
     const type = mimeType || chunks.find((chunk) => chunk.type)?.type || "audio/webm";
     const blob = new Blob(chunks, { type });
     releaseInput();
-    // A working level meter that never heard a voice: nothing worth uploading.
-    const meterWorked = peak > 0.0005;
-    if (!blob.size || (meterWorked && peak < SPEECH_LEVEL)) {
+    // A working meter that never heard a voice: nothing worth uploading (Whisper invents text on silence).
+    if (!blob.size || (meterWorked && voicedTicks === 0)) {
       fail("no-speech");
       finish();
       return;
     }
+    safely(() => opts.onPhase?.("processing"));
     safely(() => opts.onInterim?.("…"));
     transcribe(blob, recognitionLang(opts.lang), upload.signal).then(
       (text) => {
@@ -1222,9 +1310,7 @@ function listenServer(opts: ListenOptions): StopListening {
   function stopRecording(): void {
     if (phase !== "recording") return;
     phase = "stopping";
-    if (levelTimer !== null) clearInterval(levelTimer);
-    if (timeoutTimer !== null) clearTimeout(timeoutTimer);
-    levelTimer = timeoutTimer = null;
+    clearTimers();
     try {
       // "dataavailable" then "stop" follow; send() runs from onstop.
       if (recorder && recorder.state !== "inactive") {
@@ -1256,24 +1342,47 @@ function listenServer(opts: ListenOptions): StopListening {
       analyser.fftSize = 1024;
       ctx.createMediaStreamSource(input).connect(analyser);
       ctx.resume?.().catch(() => undefined);
-      const samples = new Uint8Array(analyser.fftSize);
-      let voiced = 0;
+      const floats = typeof analyser.getFloatTimeDomainData === "function" ? new Float32Array(analyser.fftSize) : null;
+      const bytes = new Uint8Array(analyser.fftSize);
+      const detector = createVoiceDetector();
       let quietTicks = 0;
       levelTimer = setInterval(() => {
         if (phase !== "recording") return;
-        analyser.getByteTimeDomainData(samples);
-        const level = levelOf(samples);
-        peak = Math.max(peak, level);
-        if (level >= SPEECH_LEVEL) {
-          voiced += 1;
-          quietTicks = 0;
+        let level: number;
+        if (floats && analyser.getFloatTimeDomainData) {
+          analyser.getFloatTimeDomainData(floats);
+          level = levelOfFloat(floats);
         } else {
-          quietTicks += 1;
+          analyser.getByteTimeDomainData(bytes);
+          level = levelOf(bytes);
         }
-        if (voiced >= SPEECH_TICKS && quietTicks * LEVEL_TICK_MS >= SERVER_SILENCE_MS) stopRecording();
+        if (level > 0) meterWorked = true;
+        const { voiced, threshold } = detector.push(level);
+        safely(() => opts.onLevel?.(Math.min(1, level / (threshold * 4))));
+        if (voiced) {
+          voicedTicks += 1;
+          quietTicks = 0;
+          if (!spoke && voicedTicks >= SPEECH_TICKS) {
+            spoke = true;
+            // Talking now: the "nobody answered" deadline no longer applies.
+            if (waitTimer !== null) clearTimeout(waitTimer);
+            waitTimer = null;
+            safely(() => opts.onPhase?.("hearing"));
+          }
+          return;
+        }
+        quietTicks += 1;
+        if (!spoke) return;
+        const voicedMs = voicedTicks * LEVEL_TICK_MS;
+        const endAfter = !opts.long
+          ? SERVER_SILENCE_MS
+          : voicedMs < HESITATION_VOICED_MS
+            ? SERVER_HESITATION_MS
+            : SERVER_LONG_SILENCE_MS;
+        if (quietTicks * LEVEL_TICK_MS >= endAfter) stopRecording();
       }, LEVEL_TICK_MS);
     } catch {
-      // No meter: stop() or the timeout ends the recording.
+      // No meter: stop() or the timeouts end the recording.
     }
   }
 
@@ -1310,8 +1419,10 @@ function listenServer(opts: ListenOptions): StopListening {
     // Safari fills mimeType only once recording has started.
     mimeType = rec.mimeType || type;
     phase = "recording";
+    safely(() => opts.onPhase?.("waiting"));
     watchLevel(input);
-    timeoutTimer = setTimeout(stopRecording, listenTimeout(opts));
+    waitTimer = setTimeout(stopRecording, listenTimeout(opts));
+    maxTimer = setTimeout(stopRecording, listenMax(opts));
   }
 
   const previous = activeListen;

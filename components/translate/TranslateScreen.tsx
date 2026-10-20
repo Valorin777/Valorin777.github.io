@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { MicButton, recognitionMessage } from "@/components/speech/SpokenFeedback";
+import { MicButton, MicLevel, recognitionMessage } from "@/components/speech/SpokenFeedback";
 import { useSpeech } from "@/components/speech/SpeechProvider";
 import { Button } from "@/components/ui/Button";
 import { ArrowLeftIcon } from "@/components/ui/Icons";
@@ -146,8 +146,9 @@ export function TranslateScreen() {
                   <MicButton
                     size="md"
                     state={rec.state}
-                    onStart={() => rec.start({ lang: dictateLang, timeoutMs: 12000 })}
-                    onStop={rec.stop}
+                    onStart={() => rec.start({ lang: dictateLang, timeoutMs: 12000, long: true })}
+                    onStop={() => (rec.phase === "waiting" ? rec.reset() : rec.stop())}
+                    done={rec.phase === "hearing"}
                     label={dir === "en" ? "Надиктовать по-русски" : "Надиктовать по-английски"}
                   />
                 ) : (
@@ -157,9 +158,18 @@ export function TranslateScreen() {
               </div>
             </div>
             {rec.state === "listening" && (
-              <p className="mt-2 text-sm text-text-3 italic" aria-live="polite">
-                {rec.interim || "Слушаю…"}
-              </p>
+              <div className="mt-2 flex items-center gap-3">
+                {rec.phase !== "processing" && <MicLevel level={rec.level} active />}
+                <p className="text-sm text-text-3 italic" aria-live="polite">
+                  {rec.phase === "processing"
+                    ? "Распознаю…"
+                    : rec.interim && rec.interim !== "…"
+                      ? rec.interim
+                      : rec.phase === "hearing"
+                        ? "Слушаю. Нажми ✓, когда закончишь"
+                        : "Слушаю…"}
+                </p>
+              </div>
             )}
             {rec.error && <p className="mt-2 text-sm text-text-2">{recognitionMessage(rec.error)}</p>}
             <div className="mt-4">

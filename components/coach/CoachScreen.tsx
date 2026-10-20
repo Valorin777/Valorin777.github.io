@@ -4,13 +4,12 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { useSpeech } from "@/components/speech/SpeechProvider";
-import { MicButton, recognitionMessage } from "@/components/speech/SpokenFeedback";
+import { MicButton, MicLevel, recognitionMessage } from "@/components/speech/SpokenFeedback";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { ArrowLeftIcon, ArrowRightIcon } from "@/components/ui/Icons";
 import { Kbd, KeyHints } from "@/components/ui/Kbd";
 import { VoiceBubble } from "./VoiceBubble";
 
-const TEXT_KEY = "b2sprint:coach-text";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useHotkeys } from "@/hooks/useHotkeys";
 import { useRecognizer } from "@/hooks/useSpeech";
@@ -18,6 +17,15 @@ import { aiEnabled, AiError, coach, coachReview, type CoachTip, type CoachTurn }
 import { SCENARIOS, type Scenario } from "@/lib/coachScenarios";
 import type { Category } from "@/lib/content/schema";
 import { actions, useHydrated } from "@/lib/store";
+
+const TEXT_KEY = "b2sprint:coach-text";
+/**
+ * A spoken answer: wait up to 15 s for the first words, then keep listening through thinking
+ * pauses (the recorder ends after ~2.5 s of quiet, or on the tick button), at most 90 s.
+ */
+const ANSWER = { long: true, timeoutMs: 15_000, maxMs: 90_000 } as const;
+/** Let the speaker hand the audio over to the mic (iOS) and the room echo die down. */
+const HANDS_FREE_DELAY_MS = 350;
 
 interface Turn extends CoachTurn {
   id: string;
@@ -89,6 +97,9 @@ function CoachBody() {
   const [online, setOnline] = useState(true);
   const endRef = useRef<HTMLDivElement>(null);
   const lastSpokenId = useRef<string | null>(null);
+  const handsFreeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Hands-free listened once and heard nothing: one more quiet try before giving up. */
+  const retried = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const canListen = Boolean(support?.recognition);
   const enabled = aiEnabled();
@@ -102,6 +113,7 @@ function CoachBody() {
       window.removeEventListener("online", update);
       window.removeEventListener("offline", update);
       abortRef.current?.abort();
+      if (handsFreeTimer.current !== null) clearTimeout(handsFreeTimer.current);
     };
   }, []);
 
@@ -199,9 +211,15 @@ function CoachBody() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- react to a finished recognition only
   }, [rec.state, rec.alternatives]);
 
+  const cancelHandsFree = () => {
+    if (handsFreeTimer.current !== null) clearTimeout(handsFreeTimer.current);
+    handsFreeTimer.current = null;
+  };
+
   // Hands-free: when the coach finishes speaking, start listening.
   useEffect(() => {
     if (speakingId) {
+      cancelHandsFree();
       lastSpokenId.current = speakingId;
       return;
     }
@@ -210,17 +228,38 @@ function CoachBody() {
     lastSpokenId.current = null;
     const last = turns[turns.length - 1];
     if (handsFree && canListen && !ended && last?.role === "assistant" && last.id === finished) {
-      rec.start({ timeoutMs: 12000 });
+      retried.current = false;
+      cancelHandsFree();
+      handsFreeTimer.current = setTimeout(() => {
+        handsFreeTimer.current = null;
+        rec.start(ANSWER);
+      }, HANDS_FREE_DELAY_MS);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- driven by speech transitions
   }, [speakingId]);
 
+  // Hands-free heard nothing (the learner was still thinking): listen once more before giving up.
+  useEffect(() => {
+    if (rec.state !== "error" || rec.error !== "no-speech" || !handsFree || retried.current || ended || thinking) return;
+    if (turns[turns.length - 1]?.role !== "assistant") return;
+    retried.current = true;
+    rec.start(ANSWER);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- react to a failed recognition only
+  }, [rec.state, rec.error]);
+
   const toggleMic = () => {
-    if (rec.state === "listening") rec.stop();
-    else {
-      stop();
-      rec.start({ timeoutMs: 12000 });
+    cancelHandsFree();
+    if (rec.state === "listening") {
+      // Nothing said yet: just stop. Otherwise finish and send what was heard.
+      if (rec.phase === "waiting") rec.reset();
+      else rec.stop();
+      return;
     }
+    // The coach is cut off on purpose: do not let that count as "finished speaking".
+    lastSpokenId.current = null;
+    retried.current = true;
+    stop();
+    rec.start(ANSWER);
   };
 
   useHotkeys({ " ": () => canListen && turns.length > 0 && !thinking && toggleMic() }, turns.length > 0);
@@ -398,18 +437,35 @@ function CoachBody() {
             </div>
           ) : canListen ? (
             <>
-              <MicButton state={rec.state} onStart={toggleMic} onStop={rec.stop} label="Answer the coach" />
-              <p className="min-h-5 text-center text-sm text-text-3" aria-live="polite">
-                {rec.state === "listening"
-                  ? rec.interim || "Listening…"
-                  : rec.error
-                    ? recognitionMessage(rec.error)
-                    : thinking
-                      ? " "
-                      : speakingId
-                        ? "The coach is speaking"
-                        : "Tap the mic and answer"}
-              </p>
+              <MicButton
+                state={rec.state}
+                onStart={toggleMic}
+                onStop={toggleMic}
+                done={rec.phase === "hearing"}
+                label="Answer the coach"
+              />
+              <div className="flex min-h-7 items-center justify-center gap-3">
+                {rec.state === "listening" && rec.phase !== "processing" && (
+                  <MicLevel level={rec.level} active={rec.state === "listening"} />
+                )}
+                <p className="text-center text-sm text-text-3" aria-live="polite">
+                  {rec.state === "listening"
+                    ? rec.phase === "processing"
+                      ? "Got it, one moment…"
+                      : rec.interim && rec.interim !== "…"
+                        ? rec.interim
+                        : rec.phase === "hearing"
+                          ? "I'm listening. Tap ✓ when you're done"
+                          : "Listening. Take your time"
+                    : rec.error
+                      ? recognitionMessage(rec.error)
+                      : thinking
+                        ? " "
+                        : speakingId
+                          ? "The coach is speaking"
+                          : "Tap the mic and answer"}
+                </p>
+              </div>
               <KeyHints>
                 <Kbd>Space</Kbd> talk
               </KeyHints>
