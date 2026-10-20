@@ -1,0 +1,9 @@
+:HL["/b2/_next/static/chunks/2w29kqnwvy6tj.css","style"]
+:HL["/b2/_next/static/media/16d91c780434f2ce-s.p.0y1w0k24nk0rl.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
+:HL["/b2/_next/static/media/1a36275c0a5dae4b-s.p.0hltrl_6_8g8_.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
+:HL["/b2/_next/static/media/8800dfc60902df36-s.p.2sla2yow9-9p_.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
+:HL["/b2/_next/static/media/cef856781ea24bd1-s.p.42r14_4q5vmfj.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
+3:[["children",{"s":"__PAGE__","h":160}]]
+2:[["children",{"s":{"n":"id","t":"d","k":"conditionals","s":[]},"h":65632,"c":"$Q3"}]]
+1:[["children",{"s":"tenses","h":131168,"c":"$Q2"}]]
+0:{"b":"_P2eKl-ej2csJtH2Go2iC","t":{"t":{"s":"","h":131152,"c":"$Q1"}}}
