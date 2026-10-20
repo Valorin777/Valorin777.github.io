@@ -15,11 +15,12 @@ import { DAYS, findTopic, getDay } from "@/content";
 import { CATEGORY_LABELS } from "@/lib/content/schema";
 import { today } from "@/lib/date";
 import { buildDrill, type DrillItem } from "@/lib/drill";
-import { getState, useHydrated } from "@/lib/store";
+import { getState, useAppState, useHydrated } from "@/lib/store";
 
 /** A short daily drill built from the learner's own mistakes: re-run the exercise, then recall the rest as cards. */
 export function DrillScreen() {
   const hydrated = useHydrated();
+  const state = useAppState();
   if (!hydrated) {
     return (
       <div className="mx-auto w-full max-w-[var(--container-reading)] px-5 pt-20" aria-busy="true">
@@ -27,7 +28,8 @@ export function DrillScreen() {
       </div>
     );
   }
-  return <Drill />;
+  // Started over elsewhere: rebuild the queue instead of answering items from cleared days.
+  return <Drill key={`${state.resetAt ?? ""}|${JSON.stringify(state.dayResets)}`} />;
 }
 
 function Drill() {

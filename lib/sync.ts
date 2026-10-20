@@ -8,6 +8,7 @@ import type {
   FinalTestResult,
   Streak,
 } from "@/types/state";
+import { diffDays, today } from "@/lib/date";
 import { initialState } from "@/lib/progress";
 
 /**
@@ -122,6 +123,18 @@ function keep<T>(record: Record<string, T>, ok: (value: T) => boolean): Record<s
   return Object.fromEntries(Object.entries(record).filter(([, value]) => ok(value)));
 }
 
+/**
+ * A stale copy's streak after a whole reset at `at`: only days after the reset's own calendar day
+ * count (streak days are local days, like today()), so days before the reset never come back.
+ */
+function streakSince(st: Streak, at: string): Streak {
+  const resetDay = today(new Date(at));
+  if (!st.lastDay || !(st.lastDay > resetDay)) return initialState().streak;
+  const cap = diffDays(resetDay, st.lastDay);
+  const current = Math.min(st.current, cap);
+  return { current, best: Math.min(st.best, cap), lastDay: st.lastDay };
+}
+
 /** A copy catching up to a whole-course reset at `at`: only what it made since then stays. */
 function sinceReset(s: AppState, at: string): AppState {
   const days: Record<number, DayProgress> = {};
@@ -134,8 +147,7 @@ function sinceReset(s: AppState, at: string): AppState {
     days,
     cards: keep(s.cards, (c) => madeSince(c.createdAt, at)),
     errors: keep(s.errors, (e) => madeSince(e.firstAt, at)),
-    // Streak days are calendar days: only a streak that went on after the reset day survives.
-    streak: s.streak.lastDay && s.streak.lastDay > at.slice(0, 10) ? s.streak : initialState().streak,
+    streak: streakSince(s.streak, at),
     dayResets: keep(s.dayResets ?? {}, (t) => cmpTime(t, at) > 0),
   };
 }

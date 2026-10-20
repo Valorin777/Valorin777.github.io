@@ -82,7 +82,7 @@ export function ResetDay() {
               ? "This also applies to your account and your other devices."
               : "On this device now, and in your account too if you sign in later."}
           </p>
-          <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="mt-4 grid gap-3 min-[420px]:grid-cols-2">
             <Button
               ref={cancel}
               variant="secondary"
@@ -165,7 +165,7 @@ export function ResetAll() {
               : " on this device now, and in your account too if you sign in later."}{" "}
             Settings stay.
           </p>
-          <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="mt-4 grid gap-3 min-[420px]:grid-cols-2">
             <Button ref={keep} variant="secondary" size="md" disabled={pending} onClick={() => setConfirm(false)}>
               Keep progress
             </Button>

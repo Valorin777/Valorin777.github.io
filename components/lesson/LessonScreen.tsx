@@ -31,12 +31,48 @@ import { MistakesStepView, RuleStepView, RuNoteStepView } from "./TheorySteps";
 
 export function LessonScreen({ dayNumber }: { dayNumber: number }) {
   const hydrated = useHydrated();
+  if (!hydrated) return <LessonSkeleton />;
+  return <OpenLesson dayNumber={dayNumber} />;
+}
+
+/** Rendered once saved progress is read, so it can remember what the page opened with. */
+function OpenLesson({ dayNumber }: { dayNumber: number }) {
   const state = useAppState();
   const meta = listDays().find((m) => m.number === dayNumber);
   const day = getDay(dayNumber);
   const final = dayNumber === 7 ? getFinal() : null;
+  const resetKey = `${state.resetAt ?? ""}|${state.dayResets[dayNumber] ?? ""}`;
+  // The reset times this page opened with. If they change, the course or this day was started
+  // over in another tab or on another device: say so, and record nothing until the learner acts.
+  const [opened, setOpened] = useState(() => ({ resetAt: state.resetAt, resetKey }));
 
-  if (!hydrated) return <LessonSkeleton />;
+  if (state.resetAt !== opened.resetAt) {
+    return (
+      <CalmMessage
+        title="The course was started over."
+        text="Your progress was cleared in another tab or on another device. Begin again from the home screen."
+        action={
+          <LinkButton href="/" full>
+            Back home
+          </LinkButton>
+        }
+      />
+    );
+  }
+
+  if (resetKey !== opened.resetKey) {
+    return (
+      <CalmMessage
+        title={`Day ${dayNumber} was started over.`}
+        text="It was cleared in another tab or on another device and begins again at its first step."
+        action={
+          <Button full onClick={() => setOpened({ resetAt: state.resetAt, resetKey })}>
+            Start Day {dayNumber}
+          </Button>
+        }
+      />
+    );
+  }
 
   if (!meta || (!day && !final)) {
     return (
@@ -72,9 +108,7 @@ export function LessonScreen({ dayNumber }: { dayNumber: number }) {
     );
   }
 
-  // Started over (here, in another tab or on another device): the open day starts from scratch
-  // instead of carrying on and writing back what was just cleared.
-  const resetKey = `${state.resetAt ?? ""}|${state.dayResets[dayNumber] ?? ""}`;
+  // Keyed on the reset times: after "Start Day N" the day really starts from scratch.
   if (final) return <FinalScreen key={resetKey} day={final} />;
   if (!day) return null;
   return <LessonPlayer key={resetKey} day={day} />;

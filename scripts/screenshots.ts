@@ -203,6 +203,16 @@ const SCREENS: Shot[] = [
   { name: "done", path: "/day/1/", state: stateAt(steps.length - 1, { answerAll: true, mistakes: 1 }) },
   { name: "settings", path: "/settings/", state: stateAt(3) },
   { name: "coach", path: "/coach/", state: stateAt(3) },
+  {
+    name: "settings-reset",
+    path: "/settings/",
+    state: stateAt(3),
+    act: async (p) => {
+      await p.getByText("Start a day over").scrollIntoViewIfNeeded();
+      await p.getByRole("button", { name: /^Day 1:/ }).click();
+      await p.getByRole("button", { name: "Start over…" }).scrollIntoViewIfNeeded();
+    },
+  },
   { name: "tenses", path: "/tenses/", state: stateAt(3) },
   { name: "tense", path: "/tenses/present-perfect/", state: stateAt(3) },
   {

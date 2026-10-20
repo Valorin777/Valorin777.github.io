@@ -38,6 +38,9 @@ const START = Date.parse("2026-10-20T08:00:00.000Z");
 const LATENCY = 50;
 /** lib/cloud.ts WRITE_DELAY_MS. */
 const WRITE_DELAY = 2000;
+/** lib/cloud.ts SLOW_WRITE_DELAY_MS. */
+const SLOW_WRITE_DELAY = 3 * 60 * 1000;
+const OWNER_KEY = "b2sprint:cloud-owner";
 
 /* ------------------------------------------------------------------ devices */
 
@@ -49,17 +52,37 @@ interface FakeUser {
 }
 
 const LEARNER: FakeUser = { uid: "learner-1", displayName: "Learner", email: "learner@example.com", photoURL: null };
+const OTHER: FakeUser = { uid: "learner-2", displayName: "Other", email: "other@example.com", photoURL: null };
 
+/** Every page made in a test. Pages that share one storage map are tabs of one browser. */
+const pages: Env[] = [];
+
+/** localStorage; a change fires a storage event in the other live tabs, as browsers do. */
 class FakeStorage {
-  constructor(readonly map: Map<string, string>) {}
+  constructor(
+    readonly map: Map<string, string>,
+    private readonly page: () => Env,
+  ) {}
   getItem(key: string): string | null {
     return this.map.has(key) ? (this.map.get(key) as string) : null;
   }
   setItem(key: string, value: string): void {
-    this.map.set(key, String(value));
+    const v = String(value);
+    if (this.map.get(key) === v) return;
+    this.map.set(key, v);
+    this.notify(key, v);
   }
   removeItem(key: string): void {
+    if (!this.map.has(key)) return;
     this.map.delete(key);
+    this.notify(key, null);
+  }
+  private notify(key: string, newValue: string | null): void {
+    const from = this.page();
+    for (const tab of pages) {
+      if (tab === from || tab.dead || tab.storage !== this.map) continue;
+      clock.schedule(0, () => tab.window.dispatchEvent(Object.assign(new Event("storage"), { key, newValue })), tab);
+    }
   }
 }
 
@@ -73,14 +96,17 @@ class Env {
   dead = false;
   /** Writes made offline, sent when the device comes back online. */
   outbox: (() => void)[] = [];
+  /** The account picked in the Google popup. */
+  popupUser: FakeUser = LEARNER;
 
   constructor(
     readonly name: string,
     readonly storage: Map<string, string>,
     public user: FakeUser | null,
   ) {
-    this.window = Object.assign(new EventTarget(), { localStorage: new FakeStorage(storage) });
+    this.window = Object.assign(new EventTarget(), { localStorage: new FakeStorage(storage, () => this) });
     this.document = Object.assign(new EventTarget(), { visibilityState: "visible" as "visible" | "hidden" });
+    pages.push(this);
   }
 }
 
@@ -361,8 +387,8 @@ class Backend {
         return () => undefined;
       },
       signInWithPopup: async () => {
-        env.user = LEARNER;
-        return { user: LEARNER };
+        env.user = env.popupUser;
+        return { user: env.popupUser };
       },
       signInWithRedirect: async () => undefined,
       getRedirectResult: async () => null,
@@ -435,6 +461,13 @@ async function settle(rounds = 3): Promise<void> {
 async function signIn(d: Device): Promise<void> {
   const done = d.run(() => d.cloud.signIn());
   await clock.advance(10 * LATENCY);
+  await done;
+}
+
+/** Signs out from Settings (which first sends unsent changes, waiting at most 2.5 s). */
+async function signOut(d: Device): Promise<void> {
+  const done = d.run(() => d.cloud.signOut());
+  await clock.advance(3000);
   await done;
 }
 
@@ -534,6 +567,7 @@ beforeEach(() => {
   clock = new Clock();
   backend = new Backend();
   leaks.length = 0;
+  pages.length = 0;
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(START);
   vi.stubGlobal("window", globalProxy((e) => e.window, "window"));
@@ -972,7 +1006,7 @@ describe("cloud sync across devices", () => {
       }
 
       // Signing out stops it all; signing in again starts exactly one sync.
-      await laptop.run(() => laptop.cloud.signOut());
+      await signOut(laptop);
       expect(activeListeners(laptop)).toBe(0);
       await signIn(laptop);
       await settle();
@@ -1021,5 +1055,209 @@ describe("cloud sync across devices", () => {
       expect(JSON.parse(backend.docs.get(path) as string)).toHaveProperty("resetAt", resetAt);
     }
     await expectQuiet();
+  });
+
+  it("11. switching Google accounts on a device takes the other account over, never mixing the two", async () => {
+    // B learned on its laptop first: older than A's reset below.
+    const laptopB = await device("laptop-b");
+    laptopB.env.popupUser = OTHER;
+    act(laptopB, (a) => learn(a, 2, ["x:rule:0"], "d2-b"));
+    await signIn(laptopB);
+    await settle();
+
+    // A learns on the phone, starts over, learns again and signs out at once.
+    await clock.advance(60_000);
+    const phone = await device("phone");
+    act(phone, (a) => learn(a, 1, ["be:rule:0"], "d1-a-old"));
+    await signIn(phone);
+    await settle();
+    await clock.advance(60_000);
+    const resetAt = await startOver(phone);
+    await clock.advance(60_000);
+    act(phone, (a) => {
+      a.updateSettings({ theme: "dark" });
+      learn(a, 3, ["p:rule:0"], "d3-a");
+    });
+    await signOut(phone);
+    // Signing out sent the change still waiting for its debounce; the local copy stays.
+    expect(remembers(backend.state(LEARNER.uid), "d3-a")).toBe(true);
+    expect(remembers(stateOf(phone), "d3-a")).toBe(true);
+    expect(phone.env.storage.get(OWNER_KEY)).toBe(LEARNER.uid);
+
+    // B signs in on the phone: B's account as it is, nothing of A's, no reset time.
+    phone.env.popupUser = OTHER;
+    await signIn(phone);
+    await settle();
+    for (const s of [stateOf(phone), stateOf(laptopB), backend.state(OTHER.uid)]) {
+      expect(s.resetAt).toBeNull();
+      expect(Object.keys(s.days)).toEqual(["2"]);
+      expect(s.days[2].doneSteps).toEqual(["x:rule:0"]);
+      expect(remembers(s, "d2-b")).toBe(true);
+      expect(remembers(s, "d3-a") || remembers(s, "d1-a-old")).toBe(false);
+      // B has settings of its own: they win over the phone's.
+      expect(s.settings.theme).toBe("system");
+    }
+    for (const p of ["core", "cards", "errors"]) {
+      expect(JSON.parse(backend.docs.get(`users/${OTHER.uid}/data/${p}`) as string)).toHaveProperty("resetAt", null);
+    }
+    expect(remembers(backend.state(LEARNER.uid), "d2-b")).toBe(false);
+    expect(phone.env.storage.get(OWNER_KEY)).toBe(OTHER.uid);
+
+    // B learns on the phone, then A signs back in: the phone takes A's cloud as it is.
+    await clock.advance(60_000);
+    act(phone, (a) => learn(a, 4, ["q:rule:0"], "d4-b"));
+    await signOut(phone);
+    phone.env.popupUser = LEARNER;
+    await signIn(phone);
+    await settle();
+    for (const s of [stateOf(phone), backend.state(LEARNER.uid)]) {
+      expect(s.resetAt).toBe(resetAt);
+      expect(Object.keys(s.days)).toEqual(["3"]);
+      expect(remembers(s, "d3-a")).toBe(true);
+      expect(remembers(s, "d2-b") || remembers(s, "d4-b") || remembers(s, "d1-a-old")).toBe(false);
+      expect(s.settings.theme).toBe("dark");
+    }
+    // B's work on the phone went to B before signing out.
+    for (const s of [stateOf(laptopB), backend.state(OTHER.uid)]) {
+      expect(remembers(s, "d4-b") && remembers(s, "d2-b")).toBe(true);
+      expect(s.resetAt).toBeNull();
+    }
+    await expectQuiet();
+  });
+
+  it("11b. a first sign-in on a device (no account remembered yet) still brings its progress in", async () => {
+    const laptop = await device("laptop");
+    act(laptop, (a) => learn(a, 1, ["be:rule:0"], "d1-laptop"));
+    await signIn(laptop);
+    await settle();
+
+    const phone = await device("phone");
+    act(phone, (a) => learn(a, 2, ["x:rule:0"], "d2-phone"));
+    expect(phone.env.storage.get(OWNER_KEY)).toBeUndefined();
+    await signIn(phone);
+    await settle();
+    for (const s of [stateOf(phone), stateOf(laptop), backend.state()]) {
+      expect(remembers(s, "d1-laptop") && remembers(s, "d2-phone")).toBe(true);
+    }
+    expect(phone.env.storage.get(OWNER_KEY)).toBe(LEARNER.uid);
+    await expectQuiet();
+  });
+
+  it("11c. switching to an account with an empty cloud starts it empty, with this device's settings", async () => {
+    const phone = await device("phone");
+    act(phone, (a) => {
+      learn(a, 1, ["be:rule:0"], "d1-a");
+      a.updateSettings({ theme: "dark" });
+    });
+    await signIn(phone);
+    await settle();
+    await startOver(phone);
+    act(phone, (a) => learn(a, 2, ["x:rule:0"], "d2-a"));
+    await settle();
+    await signOut(phone);
+
+    phone.env.popupUser = OTHER;
+    await signIn(phone);
+    await settle();
+    for (const s of [stateOf(phone), backend.state(OTHER.uid)]) {
+      expect(isEmptyProgress(s)).toBe(true);
+      expect(s.resetAt).toBeNull();
+      expect(s.dayResets).toEqual({});
+      expect(s.settings.theme).toBe("dark");
+    }
+    expect(remembers(backend.state(LEARNER.uid), "d2-a")).toBe(true);
+    await expectQuiet();
+  });
+
+  it("12. a change made in one tab is sent by that tab only, not again by the other", async () => {
+    const tab1 = await device("tab-1");
+    act(tab1, (a) => learn(a, 1, ["be:rule:0"], "d1"));
+    await signIn(tab1);
+    await settle();
+    const tab2 = await device("tab-2", { storage: tab1.env.storage, user: LEARNER });
+    await resume(tab2);
+    await settle();
+    expect(activeListeners(tab2)).toBe(3);
+    const tx1 = txBy(tab1);
+    const tx2 = txBy(tab2);
+
+    act(tab1, (a) => learn(a, 2, ["x:rule:0"], "d2"));
+    await settle();
+    expect(remembers(stateOf(tab2), "d2")).toBe(true);
+    expect(remembers(backend.state(), "d2")).toBe(true);
+    expect(txBy(tab1) - tx1).toBe(1);
+    // Tab 2 looks again a few minutes later, finds the cloud has it all, and reads nothing.
+    await clock.advance(2 * SLOW_WRITE_DELAY);
+    expect(txBy(tab2)).toBe(tx2);
+
+    // A change in tab 2 is tab 2's to send.
+    act(tab2, (a) => a.completeStep(2, "x:rule:1", null));
+    await settle();
+    expect(txBy(tab2) - tx2).toBe(1);
+    expect(backend.state().days[2].doneSteps).toEqual(["x:rule:0", "x:rule:1"]);
+    await clock.advance(2 * SLOW_WRITE_DELAY);
+    expect(txBy(tab1) - tx1).toBe(1);
+    await expectQuiet();
+  });
+
+  it("12b. a change from a tab closed before it was sent is sent by the other tab later", async () => {
+    const tab1 = await device("tab-1");
+    act(tab1, (a) => learn(a, 1, ["be:rule:0"], "d1"));
+    await signIn(tab1);
+    await settle();
+    const tab2 = await device("tab-2", { storage: tab1.env.storage, user: LEARNER });
+    await resume(tab2);
+    await settle();
+    const tx2 = txBy(tab2);
+
+    act(tab1, (a) => learn(a, 2, ["x:rule:0"], "d2"));
+    await clock.advance(LATENCY);
+    tab1.env.dead = true;
+    await clock.advance(WRITE_DELAY + 10 * LATENCY);
+    expect(remembers(backend.state(), "d2")).toBe(false);
+    await clock.advance(SLOW_WRITE_DELAY);
+    expect(txBy(tab2) - tx2).toBe(1);
+    expect(remembers(backend.state(), "d2")).toBe(true);
+    await expectQuiet();
+  });
+
+  it("13. lesson time alone goes out every few minutes, not on every tick", async () => {
+    const phone = await device("phone");
+    act(phone, (a) => learn(a, 1, ["be:rule:0"], "d1"));
+    await signIn(phone);
+    await settle();
+    const tx0 = txBy(phone);
+
+    // A tick every 15 s for two minutes: nothing sent yet.
+    for (let i = 0; i < 8; i++) {
+      act(phone, (a) => a.addSeconds(1, 15));
+      await clock.advance(15_000);
+    }
+    expect(txBy(phone)).toBe(tx0);
+    // Three minutes after the first tick (later ticks do not restart it): one write with all of it.
+    await clock.advance(60_000 + 10 * LATENCY);
+    expect(txBy(phone) - tx0).toBe(1);
+    expect(backend.state().days[1].seconds).toBe(120);
+
+    // Any other change does not wait, and takes the time along.
+    act(phone, (a) => a.addSeconds(1, 15));
+    act(phone, (a) => a.completeStep(1, "be:rule:1", null));
+    await clock.advance(WRITE_DELAY + 10 * LATENCY);
+    expect(txBy(phone) - tx0).toBe(2);
+    expect(backend.state().days[1].seconds).toBe(135);
+
+    // Time waiting when the page is hidden goes out at once.
+    act(phone, (a) => a.addSeconds(1, 15));
+    await clock.advance(15_000);
+    phone.run(() => {
+      phone.env.document.visibilityState = "hidden";
+      phone.env.document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await clock.advance(5 * LATENCY);
+    expect(txBy(phone) - tx0).toBe(3);
+    expect(backend.state().days[1].seconds).toBe(150);
+
+    await clock.advance(2 * SLOW_WRITE_DELAY);
+    expect(txBy(phone) - tx0).toBe(3);
   });
 });

@@ -413,8 +413,9 @@ export const mistakeCardId = (key: string): string => `m:${key}`;
  */
 export function recordAnswer(s: AppState, a: AnswerInput): AppState {
   const next = withDay(s, a.day, (raw) => {
-    // Practice outside the days has no "start"; its first answer dates it.
-    const d = raw.startedAt ? raw : { ...raw, startedAt: a.nowIso };
+    // Practice outside the days has no "start"; its first answer dates it. Lesson days are dated
+    // by startDay: a drill answer must not open or restart a day.
+    const d = raw.startedAt || a.day !== PRACTICE_DAY ? raw : { ...raw, startedAt: a.nowIso };
     const prev = d.answers[a.key];
     const record: AnswerRecord = prev
       ? {

@@ -384,6 +384,23 @@ describe("mergeStates after starting over", () => {
     expect(Object.keys(merged.days)).toEqual(["3"]);
   });
 
+  it("a stale streak counts only days after the reset's own local day (Moscow, UTC+3)", () => {
+    const tz = process.env.TZ;
+    process.env.TZ = "Europe/Moscow";
+    try {
+      // Practised at 00:30 Moscow on Oct 20 (still Oct 19 in UTC), reset at 01:00 Moscow.
+      const stale = { ...phone(), streak: { current: 6, best: 6, lastDay: "2026-10-20" } };
+      const fresh = touch(resetProgress(stale, "2026-10-19T22:00:00.000Z"), "2026-10-19T22:00:00.000Z");
+      expect(mergeStates(stale, fresh).streak).toEqual(initialState().streak);
+      // A stale device that went on practising for two more days keeps only those two.
+      const later = { ...stale, streak: { current: 8, best: 8, lastDay: "2026-10-22" } };
+      expect(mergeStates(later, fresh).streak).toEqual({ current: 2, best: 2, lastDay: "2026-10-22" });
+    } finally {
+      if (tz === undefined) delete process.env.TZ;
+      else process.env.TZ = tz;
+    }
+  });
+
   it("a day started over on another device keeps later days that were started open", () => {
     const old = mergeStates(phone(), laptop());
     const fresh = touch(resetDay(old, 1, at(12)), at(12));

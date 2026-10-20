@@ -179,16 +179,27 @@ async function main() {
     await page.goto(`${url}/settings/`, { waitUntil: "networkidle" });
     await page.getByRole("button", { name: /^Day 2:/ }).click();
     await page.getByRole("button", { name: "Start Day 2 over" }).click();
+    await lesson.getByText("Day 2 was started over.").waitFor({ timeout: 6000 });
+    s = await saved(page);
+    ok(s.position === null && (s.days[2]?.doneSteps.length ?? 0) === 0, "the open Day 2 tab says so and records nothing on its own");
+    await lesson.getByRole("button", { name: "Start Day 2" }).click();
     await lesson.waitForFunction(
-      ([key, id]) => {
-        const st = JSON.parse(localStorage.getItem(key) ?? "{}");
-        return st.position?.stepId === id && (st.days?.[2]?.doneSteps?.length ?? 0) === 0;
-      },
+      ([key, id]) => JSON.parse(localStorage.getItem(key) ?? "{}").position?.stepId === id,
       [STORAGE_KEY, d2[0]!.id] as const,
       { timeout: 6000 },
     );
-    ok(true, "the open Day 2 tab jumps back to its first step and keeps no old steps");
+    ok(true, "Start Day 2 opens it at its first step");
+
+    // A whole reset reaching an open lesson: no silent restart of Day 1.
+    await page.getByRole("button", { name: "Start over…" }).click();
+    await page.getByRole("button", { name: "Clear everything" }).click();
+    await page.waitForURL(/\/b2\/$/, { timeout: 6000 });
+    await lesson.getByText("The course was started over.").waitFor({ timeout: 6000 });
+    s = await saved(page);
+    ok(Object.keys(s.days).length === 0 && s.position === null, "the open lesson tab records nothing after a whole reset");
     await lesson.close();
+    // Seed again for the settings flow below.
+    await page.evaluate(([key, value]) => localStorage.setItem(key, value), [STORAGE_KEY, JSON.stringify(seeded())] as const);
 
     // Start the whole course over.
     await page.goto(`${url}/settings/`, { waitUntil: "networkidle" });

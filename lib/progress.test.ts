@@ -518,6 +518,8 @@ describe("reset, mastery and top errors", () => {
     const s = recordAnswer(initialState(), wrong({ day: 0, key: "coach:i-was-went", nowIso: T1 }));
     expect(s.days[0]?.startedAt).toBe(T1);
     expect(courseStarted(s)).toBe(false);
+    // A drill answer for a lesson day neither opens nor dates that day.
+    expect(recordAnswer(initialState(), wrong({ day: 4, key: "x-4" })).days[4]?.startedAt).toBeUndefined();
     expect(courseStarted(startDay(s, 1, T2))).toBe(true);
     const legacy = JSON.parse(JSON.stringify(recordAnswer(s, wrong({ day: 0, key: "tense-past-simple-x" })))) as AppState;
     for (const e of Object.values(legacy.errors)) e.day = 1;

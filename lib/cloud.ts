@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
+import { STORAGE_KEY } from "@/lib/constants";
 import { loadFirebase, type FirebaseKit } from "@/lib/firebase";
-import { migrate } from "@/lib/progress";
+import { initialState, migrate } from "@/lib/progress";
 import { mergeStates, missesResets } from "@/lib/sync";
 import { getState, replaceState, subscribe as subscribeStore } from "@/lib/store";
 import type { AppState } from "@/types/state";
@@ -38,7 +39,11 @@ export interface CloudState {
 }
 
 const SIGNED_IN_FLAG = "b2sprint:cloud";
+/** uid of the account the local copy was last synced with. */
+const OWNER_KEY = "b2sprint:cloud-owner";
 const WRITE_DELAY_MS = 2000;
+/** For changes that alone need not go out soon: lesson time ticks, another tab's changes. */
+const SLOW_WRITE_DELAY_MS = 3 * 60 * 1000;
 
 let cloud: CloudState = { status: "signed-out", user: null, lastSyncAt: null, problem: null };
 const listeners = new Set<() => void>();
@@ -100,6 +105,37 @@ function join(docs: Docs): AppState | null {
   return mergeStates(mergeStates(base, cards), errors);
 }
 
+/** The state without what lesson time ticks change (seconds per day, updatedAt). */
+function withoutTime(s: AppState): string {
+  const days = Object.fromEntries(Object.entries(s.days).map(([key, day]) => [key, { ...day, seconds: 0 }]));
+  return canonical({ ...s, updatedAt: "", days });
+}
+
+/** The account whose cloud this device's copy belongs to; kept on sign-out. */
+function readOwner(): string | null {
+  try {
+    return window.localStorage.getItem(OWNER_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeOwner(uid: string): void {
+  try {
+    if (window.localStorage.getItem(OWNER_KEY) !== uid) window.localStorage.setItem(OWNER_KEY, uid);
+  } catch {
+    // private mode: an account switch then merges, as before this key existed
+  }
+}
+
+function readStored(): string | null {
+  try {
+    return window.localStorage.getItem(STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
 let stopSync: (() => void) | null = null;
 let flushNow: (() => Promise<void>) | null = null;
 /** The running sync. A second start for the same account (sign-in racing the auth listener) joins it. */
@@ -115,8 +151,12 @@ export function flushCloud(timeoutMs = 2500): Promise<void> {
   return Promise.race([flushNow(), new Promise<void>((resolve) => setTimeout(resolve, timeoutMs))]);
 }
 
+const errorCode = (e: unknown): string =>
+  typeof e === "object" && e && "code" in e ? String((e as { code: unknown }).code) : "";
+
+/** For signing in. */
 function errorMessage(e: unknown): string {
-  const code = typeof e === "object" && e && "code" in e ? String((e as { code: unknown }).code) : "";
+  const code = errorCode(e);
   if (code.includes("popup-closed") || code.includes("cancelled-popup")) return "";
   if (code.includes("operation-not-allowed") || code.includes("configuration-not-found")) {
     return "Google sign-in is not switched on for this app yet.";
@@ -126,6 +166,31 @@ function errorMessage(e: unknown): string {
     return "No connection. Your progress is safe on this device.";
   }
   return "Sign-in did not work. Please try again.";
+}
+
+const PASSING_SYNC_ERRORS = [
+  "network",
+  "unavailable",
+  "deadline-exceeded",
+  "unknown",
+  "internal",
+  "cancelled",
+  "resource-exhausted",
+  "aborted",
+  "failed-precondition",
+  "unauthenticated",
+];
+
+/** For a sync write that did not go through. */
+function syncProblem(e: unknown): string {
+  const code = errorCode(e);
+  if (!code || PASSING_SYNC_ERRORS.some((c) => code.includes(c))) {
+    return "Could not reach your account just now. Your progress is safe on this device and will sync later.";
+  }
+  if (code.includes("permission-denied")) {
+    return "Your account did not accept this device's changes. Try signing out and in again.";
+  }
+  return "Sync paused. Your progress is safe on this device.";
 }
 
 function startSync(k: FirebaseKit, uid: string): Promise<void> {
@@ -146,8 +211,20 @@ function startSync(k: FirebaseKit, uid: string): Promise<void> {
   let dirty = true;
   /** Set while this module replaces the local state with a merge: that is no change to send. */
   let applying = false;
+  /**
+   * The local copy belongs to another account that was signed in here before. The first write
+   * takes this account over instead of merging: the other account's progress and reset times
+   * must never reach this one. Nothing is merged before that.
+   */
+  const owner = readOwner();
+  let adopting = owner !== null && owner !== uid;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let resetCheck: ReturnType<typeof setTimeout> | null = null;
+  let lastSeen = withoutTime(getState());
+  /** Changes another tab wrote to local storage (it syncs them itself), counted and the last one. */
+  let otherTabWrites = 0;
+  let otherTabValue: string | null = null;
+  let otherTabWritesAtWait = 0;
   set({ status: "syncing", problem: null });
 
   const apply = (s: AppState) => {
@@ -159,11 +236,25 @@ function startSync(k: FirebaseKit, uid: string): Promise<void> {
     }
   };
 
-  /** One atomic read-merge-write of the three documents. Never rejects. */
-  const writeOnce = async (): Promise<void> => {
+  const markSynced = () => set({ status: "synced", lastSyncAt: new Date().toISOString(), problem: null });
+
+  /**
+   * One atomic read-merge-write of the three documents. Never rejects. Unless forced, it is
+   * skipped when the cloud already holds the local state, as far as this device knows.
+   */
+  const writeOnce = async (force: boolean): Promise<void> => {
     if (stopped) return;
+    if (!force && !adopting) {
+      const parts = split(getState());
+      if (PARTS.every((p) => remote[p] !== undefined && canonical(remote[p]) === canonical(parts[p]))) {
+        dirty = false;
+        if (cloud.status !== "synced") markSynced();
+        return;
+      }
+    }
     dirty = false;
     const before = { ...received };
+    const adopt = adopting;
     try {
       // Firestore runs this again when another device wrote between the reads and the commit.
       const out = await runTransaction(k.db, async (tx) => {
@@ -175,12 +266,24 @@ function startSync(k: FirebaseKit, uid: string): Promise<void> {
         });
         const local = getState();
         const fromCloud = join(read);
-        const merged = fromCloud ? mergeStates(local, fromCloud) : local;
+        let merged: AppState;
+        if (!adopt) {
+          merged = fromCloud ? mergeStates(local, fromCloud) : local;
+        } else if (fromCloud) {
+          // Take the account as it is; this device's settings only if the account has none.
+          const hasSettings = typeof read.core?.settings === "object" && read.core.settings !== null;
+          merged = hasSettings ? fromCloud : { ...fromCloud, settings: local.settings };
+        } else {
+          // A new account: start it empty, with this device's settings only.
+          merged = { ...initialState(), updatedAt: local.updatedAt, settings: local.settings };
+        }
         const parts = split(merged);
         const now: Docs = {};
         for (const p of PARTS) {
           const was = read[p];
-          if (was && canonical(was) === canonical(parts[p])) {
+          if (adopt && fromCloud) {
+            now[p] = was;
+          } else if (was && canonical(was) === canonical(parts[p])) {
             now[p] = was;
           } else {
             tx.set(ref(p), parts[p]);
@@ -191,27 +294,37 @@ function startSync(k: FirebaseKit, uid: string): Promise<void> {
       });
       if (stopped) return;
       // What the cloud holds now, unless a snapshot that came in meanwhile already said so.
-      for (const p of PARTS) if (received[p] === before[p]) remote[p] = out.now[p];
+      for (const p of PARTS) {
+        const held = out.now[p];
+        if (held && received[p] === before[p]) remote[p] = held;
+      }
       const current = getState();
-      // A change made while the transaction ran stays (it is dirty and goes with the next write).
-      const next = current === out.local ? out.merged : mergeStates(current, out.merged);
+      // A change made while the transaction ran stays (it is dirty and goes with the next write);
+      // not when taking an account over, where it would carry the other account's data along.
+      const next = adopt || current === out.local ? out.merged : mergeStates(current, out.merged);
       if (canonical(next) !== canonical(current)) apply(next);
-      set({ status: "synced", lastSyncAt: new Date().toISOString(), problem: null });
+      adopting = false;
+      writeOwner(uid);
+      markSynced();
     } catch (e) {
       if (stopped) return;
       dirty = true;
-      set({ status: navigator.onLine ? "error" : "offline", problem: errorMessage(e) || null });
+      set({ status: navigator.onLine ? "error" : "offline", problem: syncProblem(e) });
     }
   };
 
-  // One transaction at a time; calls made while one waits to start share it.
+  // One transaction at a time; calls made while one waits to start share it (forced if any is).
   let tail: Promise<void> = Promise.resolve();
   let queued: Promise<void> | null = null;
-  const write = (): Promise<void> => {
+  let queuedForce = false;
+  const write = (force = false): Promise<void> => {
+    queuedForce ||= force;
     if (queued) return queued;
     const run = tail.then(() => {
+      const f = queuedForce;
       queued = null;
-      return writeOnce();
+      queuedForce = false;
+      return writeOnce(f);
     });
     queued = run;
     tail = run;
@@ -225,12 +338,29 @@ function startSync(k: FirebaseKit, uid: string): Promise<void> {
     return dirty ? write() : tail;
   };
 
+  const arm = (ms: number) => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(onTimer, ms);
+  };
+  function onTimer() {
+    timer = null;
+    // A change another tab made is that tab's to send: wait while it keeps writing, then send
+    // only what the cloud still lacks (that tab may have been closed before it sent it).
+    if (otherTabValue !== null && readStored() === otherTabValue && otherTabWrites !== otherTabWritesAtWait) {
+      otherTabWritesAtWait = otherTabWrites;
+      arm(SLOW_WRITE_DELAY_MS);
+      return;
+    }
+    void write();
+  }
+
   // Remote → local: changes from other devices.
   const unsubs = PARTS.map((p) =>
     onSnapshot(ref(p), (snap) => {
       if (stopped || snap.metadata.hasPendingWrites || !snap.exists()) return;
       received[p]++;
       remote[p] = snap.data();
+      if (adopting) return;
       const fromCloud = join(remote);
       if (!fromCloud) return;
       const local = getState();
@@ -243,22 +373,29 @@ function startSync(k: FirebaseKit, uid: string): Promise<void> {
         resetCheck = null;
         const s = getState();
         const stale = PARTS.some((q) => remote[q] !== undefined && missesResets(migrate(stampsOf(remote[q])), s));
-        if (!stopped && stale) void write();
+        if (!stopped && !adopting && stale) void write(true);
       }, 0);
-      if (!dirty && !snap.metadata.fromCache) set({ status: "synced", lastSyncAt: new Date().toISOString() });
+      if (!dirty && !snap.metadata.fromCache) markSynced();
     }),
   );
 
-  // Local → remote: debounced.
+  // Local → remote: debounced. Lesson time ticks every few seconds; alone it goes out rarely.
   const unsubStore = subscribeStore(() => {
+    const seen = withoutTime(getState());
+    const timeOnly = seen === lastSeen;
+    lastSeen = seen;
     if (applying) return;
     dirty = true;
-    if (timer) clearTimeout(timer);
-    timer = setTimeout(() => {
-      timer = null;
-      void write();
-    }, WRITE_DELAY_MS);
+    if (!timeOnly) arm(WRITE_DELAY_MS);
+    else if (!timer) arm(SLOW_WRITE_DELAY_MS);
   });
+
+  const onStorage = (e: StorageEvent) => {
+    if (e.key !== STORAGE_KEY) return;
+    otherTabWrites++;
+    otherTabValue = e.newValue;
+  };
+  window.addEventListener("storage", onStorage);
 
   // Back online: send what could not be sent (offline transactions fail, they are not queued).
   const onOnline = () => void flush();
@@ -271,11 +408,12 @@ function startSync(k: FirebaseKit, uid: string): Promise<void> {
   document.addEventListener("visibilitychange", onHide);
   window.addEventListener("pagehide", onHide);
 
-  const mine = { uid, resync: write };
+  const mine = { uid, resync: () => write(true) };
   const stop = () => {
     stopped = true;
     unsubs.forEach((u) => u());
     unsubStore();
+    window.removeEventListener("storage", onStorage);
     window.removeEventListener("online", onOnline);
     document.removeEventListener("visibilitychange", onHide);
     window.removeEventListener("pagehide", onHide);
@@ -290,8 +428,9 @@ function startSync(k: FirebaseKit, uid: string): Promise<void> {
   stopSync = stop;
   flushNow = flush;
   session = mine;
-  // First sync: the cloud gets what this device did meanwhile, this device gets the cloud.
-  return write();
+  // First sync: the cloud gets what this device did meanwhile (or, after another account, this
+  // device takes the account over), and this device gets the cloud.
+  return write(true);
 }
 
 function toUser(u: { uid: string; displayName: string | null; email: string | null; photoURL: string | null }): CloudUser {
@@ -383,6 +522,9 @@ export async function signOut(): Promise<void> {
   } catch {
     // ignore
   }
+  // Changes not sent yet belong to this account: send them first (never blocks for long). The
+  // local copy and its owner stay, so signing in with another account takes that one over.
+  await flushCloud();
   stopSync?.();
   const k = await loadFirebase().catch(() => null);
   await k?.authMod.signOut(k.auth).catch(() => undefined);
