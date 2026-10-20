@@ -72,9 +72,12 @@ export function LessonScreen({ dayNumber }: { dayNumber: number }) {
     );
   }
 
-  if (final) return <FinalScreen day={final} />;
+  // Started over (here, in another tab or on another device): the open day starts from scratch
+  // instead of carrying on and writing back what was just cleared.
+  const resetKey = `${state.resetAt ?? ""}|${state.dayResets[dayNumber] ?? ""}`;
+  if (final) return <FinalScreen key={resetKey} day={final} />;
   if (!day) return null;
-  return <LessonPlayer day={day} />;
+  return <LessonPlayer key={resetKey} day={day} />;
 }
 
 function initialIndex(day: Day, steps: Step[]): number {

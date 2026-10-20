@@ -4,6 +4,7 @@ import {
   completeStep,
   initialState,
   migrate,
+  isDayUnlocked,
   recordAnswer,
   resetDay,
   resetProgress,
@@ -286,7 +287,8 @@ describe("mergeStates after starting over", () => {
   const RESET = at(12);
 
   it("a reset survives the stale cloud copy, in both directions", () => {
-    const old = mergeStates(phone(), laptop());
+    // Everything here happened before the reset (the streak too: the laptop fixture is dated a day later).
+    const old = { ...mergeStates(phone(), laptop()), streak: { current: 2, best: 2, lastDay: D0 } };
     const fresh = touch(resetProgress(old, RESET), RESET);
     for (const merged of [mergeStates(fresh, old), mergeStates(old, fresh)]) {
       expect(isEmptyProgress(merged)).toBe(true);
@@ -303,11 +305,13 @@ describe("mergeStates after starting over", () => {
     fresh = completeStep(fresh, 1, "be:rule:0", "be:rule:1", at(12, 5));
     fresh = recordAnswer(fresh, answer({ key: "new-1", nowIso: at(12, 6) }));
     fresh = touch(fresh, at(12, 6));
-    // The stale device even made progress later, without syncing first: the reset still wins.
+    // The stale device made one more mistake after the reset without syncing: that one is kept,
+    // everything it made before the reset is not.
     const stale = touch(recordAnswer(laptop(), answer({ key: "late-1", nowIso: at(13) })), at(13));
     const merged = mergeStates(stale, fresh);
     expect(merged.days[1]?.doneSteps).toEqual(["be:rule:0"]);
-    expect(Object.keys(merged.errors)).toEqual(["new-1"]);
+    expect(Object.keys(merged.errors).sort()).toEqual(["late-1", "new-1"]);
+    expect(merged.cards["m:be-1"]).toBeUndefined();
     expect(merged.days[2]).toBeUndefined();
     // Settings are not progress: the newer copy's settings still win.
     expect(merged.settings.theme).toBe(stale.settings.theme);
@@ -351,14 +355,41 @@ describe("mergeStates after starting over", () => {
   });
 
   it("merge(x, x) is x with reset times, and copies from older app versions merge", () => {
-    const fresh = touch(resetDay(touch(resetProgress(phone(), at(7)), at(7)), 1, at(8)), at(8));
+    const fresh = touch(resetDay(touch(resetProgress(laptop(), at(12)), at(12)), 1, at(13)), at(13));
     expect(mergeStates(fresh, fresh)).toEqual(fresh);
-    const legacy = { ...laptop() } as Partial<AppState>;
+    const legacy = { ...phone() } as Partial<AppState>;
     delete legacy.resetAt;
     delete legacy.dayResets;
     const merged = mergeStates(fresh, legacy as AppState);
-    expect(merged.resetAt).toBe(at(7));
+    expect(merged.resetAt).toBe(at(12));
     expect(isEmptyProgress(merged)).toBe(true);
+  });
+
+  it("a device used signed out since the reset keeps its new work when it signs in", () => {
+    // The account was reset at 12:00; this phone never synced, but started after that.
+    const cloud = touch(resetProgress(mergeStates(phone(), laptop()), at(12)), at(12));
+    let mine = initialState();
+    mine = completeStep(mine, 1, "be:rule:0", "be:rule:1", at(13));
+    mine = recordAnswer(mine, answer({ key: "fresh-1", nowIso: at(13, 5) }));
+    mine = touch(mine, at(13, 5));
+    for (const merged of [mergeStates(mine, cloud), mergeStates(cloud, mine)]) {
+      expect(merged.days[1]?.doneSteps).toEqual(["be:rule:0"]);
+      expect(Object.keys(merged.errors)).toEqual(["fresh-1"]);
+      expect(merged.resetAt).toBe(at(12));
+    }
+    // And the reverse: a reset made signed out clears the account's older progress, keeps its newer.
+    const offline = touch(resetProgress(phone(), at(12)), at(12));
+    const account = touch(completeStep(laptop(), 3, "z:rule:0", "z:rule:1", at(14)), at(14));
+    const merged = mergeStates(offline, account);
+    expect(Object.keys(merged.days)).toEqual(["3"]);
+  });
+
+  it("a day started over on another device keeps later days that were started open", () => {
+    const old = mergeStates(phone(), laptop());
+    const fresh = touch(resetDay(old, 1, at(12)), at(12));
+    const merged = mergeStates(old, fresh);
+    expect(merged.days[1]).toBeUndefined();
+    expect(isDayUnlocked(merged, 2)).toBe(true);
   });
 });
 

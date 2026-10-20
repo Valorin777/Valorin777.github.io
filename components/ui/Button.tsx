@@ -25,7 +25,7 @@ export function buttonClass(variant: ButtonVariant = "primary", size: ButtonSize
   return `${base} ${variants[variant]} ${sizes[size]} ${full ? "w-full" : ""}`;
 }
 
-type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+type ButtonProps = ComponentProps<"button"> & {
   variant?: ButtonVariant;
   size?: ButtonSize;
   full?: boolean;

@@ -59,12 +59,49 @@ const CATEGORY_DAY: Record<Category, number> = {
   countable: 6,
 };
 
+/**
+ * The draft remembers which reset it was typed under: after starting over (on any device, synced
+ * in later) old answers must not come back.
+ */
+interface Draft {
+  resetAt: string | null;
+  day7: string | null;
+  answers: ClozeAnswers;
+}
+
+function draftStamp(): Pick<Draft, "resetAt" | "day7"> {
+  const s = getState();
+  return { resetAt: s.resetAt, day7: s.dayResets[7] ?? null };
+}
+
 function readDraft(): ClozeAnswers {
   try {
     const raw = JSON.parse(window.localStorage.getItem(DRAFT_KEY) ?? "{}") as unknown;
-    return raw && typeof raw === "object" ? (raw as ClozeAnswers) : {};
+    if (!raw || typeof raw !== "object") return {};
+    const stamp = draftStamp();
+    const draft = raw as Partial<Draft>;
+    if ("answers" in draft) {
+      if (draft.resetAt === stamp.resetAt && draft.day7 === stamp.day7 && draft.answers && typeof draft.answers === "object") {
+        return draft.answers;
+      }
+      window.localStorage.removeItem(DRAFT_KEY);
+      return {};
+    }
+    // A draft from before reset times existed: only valid if nothing was ever started over.
+    if (stamp.resetAt === null && stamp.day7 === null) return raw as ClozeAnswers;
+    window.localStorage.removeItem(DRAFT_KEY);
+    return {};
   } catch {
     return {};
+  }
+}
+
+function writeDraft(answers: ClozeAnswers): void {
+  try {
+    const draft: Draft = { ...draftStamp(), answers };
+    window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  } catch {
+    // private mode: answers live for this tab
   }
 }
 
@@ -96,11 +133,7 @@ export function FinalScreen({ day }: { day: FinalDay }) {
   const setAnswer = (key: string, value: string | number) => {
     setAnswers((a) => {
       const next = { ...a, [key]: value };
-      try {
-        window.localStorage.setItem(DRAFT_KEY, JSON.stringify(next));
-      } catch {
-        // private mode: answers live for this tab
-      }
+      writeDraft(next);
       return next;
     });
   };

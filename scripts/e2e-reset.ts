@@ -14,6 +14,7 @@ import {
   addPhraseCards,
   completeStep,
   initialState,
+  isDayUnlocked,
   recordAnswer,
   setDiagnostic,
   setFinalTest,
@@ -108,7 +109,8 @@ async function main() {
   const local = argv.url ? null : await serve();
   const url = argv.url ?? local!.url;
   const browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await context.newPage();
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   try {
@@ -143,7 +145,7 @@ async function main() {
     ok(s.days[1] === undefined, "Day 1 progress is cleared");
     ok(!s.errors["day1-mistake"] && !Object.values(s.cards).some((c) => c.day === 1), "Day 1 mistakes and cards are cleared");
     ok(s.days[2]?.doneSteps.length === 5 && s.errors["day2-mistake"], "Day 2 is untouched");
-    ok(s.days[2]?.override === true, "Day 2 stays open");
+    ok(isDayUnlocked(s, 2), "Day 2 stays open");
     ok(s.position === null, "the saved position inside Day 1 is gone");
     ok(typeof s.dayResets?.[1] === "string", "the day reset time is saved");
     ok(s.diagnostic !== null && s.finalTest !== null, "the level check and Day 7 stay");
@@ -162,6 +164,31 @@ async function main() {
       { timeout: 6000 },
     );
     ok(true, `Day 1 opens at its first step (${first.id})`);
+
+    // A lesson open in another tab starts from scratch when its day is started over elsewhere.
+    const d2 = buildSteps(getDay(2)!);
+    const lesson = await context.newPage();
+    lesson.on("pageerror", (e) => errors.push(e.message));
+    await lesson.goto(`${url}/day/2/`, { waitUntil: "networkidle" });
+    await lesson.waitForFunction(
+      ([key, id]) => JSON.parse(localStorage.getItem(key) ?? "{}").position?.stepId === id,
+      [STORAGE_KEY, d2[5]!.id] as const,
+      { timeout: 6000 },
+    );
+    ok(true, "the other tab resumes Day 2 where it stopped");
+    await page.goto(`${url}/settings/`, { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: /^Day 2:/ }).click();
+    await page.getByRole("button", { name: "Start Day 2 over" }).click();
+    await lesson.waitForFunction(
+      ([key, id]) => {
+        const st = JSON.parse(localStorage.getItem(key) ?? "{}");
+        return st.position?.stepId === id && (st.days?.[2]?.doneSteps?.length ?? 0) === 0;
+      },
+      [STORAGE_KEY, d2[0]!.id] as const,
+      { timeout: 6000 },
+    );
+    ok(true, "the open Day 2 tab jumps back to its first step and keeps no old steps");
+    await lesson.close();
 
     // Start the whole course over.
     await page.goto(`${url}/settings/`, { waitUntil: "networkidle" });

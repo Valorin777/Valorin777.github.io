@@ -87,6 +87,19 @@ const isDayNumber = (n: number): boolean => Number.isInteger(n) && n >= DAY_MIN 
  */
 export const PRACTICE_DAY = 0;
 const isProgressDay = (n: number): boolean => Number.isInteger(n) && n >= PRACTICE_DAY && n <= DAY_MAX;
+
+/**
+ * Answer keys of practice outside the days: coach corrections ("coach:<slug>", CoachScreen) and
+ * the tense reference ("tense-<id>-<exercise>", lib/tenses.ts). Older versions stored these as
+ * Day 1 on reload; they always belong to the practice day.
+ */
+export const PRACTICE_KEY_PREFIXES = ["coach:", "tense-"] as const;
+export const isPracticeKey = (key: string): boolean => PRACTICE_KEY_PREFIXES.some((p) => key.startsWith(p));
+
+/** True once the learner has opened a lesson day (practice with the coach or tenses does not count). */
+export function courseStarted(s: AppState): boolean {
+  return Object.keys(s.days).some((k) => Number(k) !== PRACTICE_DAY);
+}
 const UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 const entries = (v: unknown): [string, unknown][] =>
   isObj(v) ? Object.entries(v).filter(([k]) => !UNSAFE_KEYS.has(k)) : [];
@@ -163,7 +176,7 @@ function migrateCard(id: string, raw: unknown): Card | null {
     back,
     category: cat,
     source,
-    day: day !== undefined && isProgressDay(day) ? day : DAY_MIN,
+    day: isPracticeKey(id.replace(/^m:/, "")) ? PRACTICE_DAY : day !== undefined && isProgressDay(day) ? day : DAY_MIN,
     createdAt,
     ef: ef === undefined ? 2.5 : Math.max(MIN_EF, ef),
     interval: int(raw.interval, 0, 0),
@@ -190,7 +203,7 @@ function migrateError(key: string, raw: unknown): ErrorEntry | null {
   return {
     key,
     category: cat,
-    day: day !== undefined && isProgressDay(day) ? day : DAY_MIN,
+    day: isPracticeKey(key) ? PRACTICE_DAY : day !== undefined && isProgressDay(day) ? day : DAY_MIN,
     prompt,
     wrong: str(raw.wrong) ?? "",
     right,
@@ -333,7 +346,9 @@ function withDay(s: AppState, day: number, update: (d: DayProgress) => DayProgre
 export function isDayUnlocked(s: AppState, day: number): boolean {
   if (day === 1) return true;
   if (!Number.isInteger(day) || day < 1) return false;
-  return Boolean(s.days[day - 1]?.completedAt) || s.days[day]?.override === true;
+  const p = s.days[day];
+  // A day the learner has already started stays open, even when an earlier day is started over.
+  return Boolean(s.days[day - 1]?.completedAt) || p?.override === true || Boolean(p?.startedAt) || (p?.doneSteps.length ?? 0) > 0;
 }
 
 export function setOverride(s: AppState, day: number): AppState {
@@ -397,7 +412,9 @@ export const mistakeCardId = (key: string): string => `m:${key}`;
  * ("m:<key>"), or makes that flashcard due again today if it already exists.
  */
 export function recordAnswer(s: AppState, a: AnswerInput): AppState {
-  const next = withDay(s, a.day, (d) => {
+  const next = withDay(s, a.day, (raw) => {
+    // Practice outside the days has no "start"; its first answer dates it.
+    const d = raw.startedAt ? raw : { ...raw, startedAt: a.nowIso };
     const prev = d.answers[a.key];
     const record: AnswerRecord = prev
       ? {
@@ -533,12 +550,26 @@ export function updateSettings(s: AppState, patch: Partial<Settings>): AppState 
 }
 
 /**
+ * A reset time later than every reset this copy has seen, even when this device's clock is
+ * behind the device that made them: otherwise the merge would ignore the new reset.
+ */
+export function stampAfter(nowIso: string, ...seen: (string | null | undefined)[]): string {
+  let t = Date.parse(nowIso);
+  for (const x of seen) {
+    const v = x ? Date.parse(x) : Number.NaN;
+    if (!Number.isNaN(v) && v >= t) t = v + 1;
+  }
+  return new Date(t).toISOString();
+}
+
+/**
  * Starts the whole course over: every day, card, mistake, the level check, the Day 7 result,
  * practice outside the days (coach, tenses) and the streak. Settings stay. The reset time makes
- * older copies (the cloud, other devices) give up their data on the next merge.
+ * older copies (the cloud, other devices) give up what they made before it on the next merge.
  */
 export function resetProgress(s: AppState, nowIso: string): AppState {
-  return { ...initialState(), updatedAt: s.updatedAt, settings: { ...s.settings }, resetAt: nowIso };
+  const resetAt = stampAfter(nowIso, s.resetAt, ...Object.values(s.dayResets));
+  return { ...initialState(), updatedAt: s.updatedAt, settings: { ...s.settings }, resetAt };
 }
 
 /** True when the day has anything to start over (progress, cards, mistakes, a Day 7 result). */
@@ -569,18 +600,16 @@ export function withoutDay(s: AppState, day: number): AppState {
 }
 
 /**
- * Starts one day over from its first step. Later days the learner had already opened stay open
- * (they would otherwise lock behind the day being redone).
+ * Starts one day over from its first step. A day that was open stays open (also when the day
+ * before it was started over too); later days the learner had started stay open (isDayUnlocked).
  */
 export function resetDay(s: AppState, day: number, nowIso: string): AppState {
   if (!isProgressDay(day)) return s;
   const next = withoutDay(s, day);
   const days = { ...next.days };
-  for (const [key, p] of Object.entries(days)) {
-    const n = Number(key);
-    if (n > day && n <= DAY_MAX && (p.doneSteps.length > 0 || p.startedAt) && !p.override) days[n] = { ...p, override: true };
-  }
-  return { ...next, days, dayResets: { ...s.dayResets, [day]: nowIso } };
+  if (day > 1 && day <= DAY_MAX && isDayUnlocked(s, day)) days[day] = { ...emptyDay(), override: true };
+  const at = stampAfter(nowIso, s.resetAt, s.dayResets[day]);
+  return { ...next, days, dayResets: { ...s.dayResets, [day]: at } };
 }
 
 /* ----------------------------------------------------------------- mastery */

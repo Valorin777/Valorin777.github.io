@@ -14,7 +14,10 @@ import {
   migrate,
   phraseCardId,
   recordAnswer,
+  courseStarted,
   dayHasProgress,
+  isPracticeKey,
+  stampAfter,
   resetDay,
   resetProgress,
   reviewCard,
@@ -478,11 +481,52 @@ describe("reset, mastery and top errors", () => {
     expect(dayHasProgress(r, 1)).toBe(false);
     // Day 2 and the practice day are untouched; Day 2 stays unlocked although Day 1 is redone.
     expect(r.days[2]?.doneSteps).toEqual(["b:rule:0"]);
-    expect(r.days[2]?.override).toBe(true);
     expect(isDayUnlocked(r, 2)).toBe(true);
     expect(r.errors["pp-2"]).toBeDefined();
     expect(r.errors["tense-x"]?.day).toBe(0);
     expect(r.streak).toEqual(s.streak);
+  });
+
+  it("a day that was open stays open after starting it over, even with the day before started over too", () => {
+    let s = completeStep(initialState(), 1, "a:rule:0", null, T1);
+    s = { ...s, days: { ...s.days, 1: { ...s.days[1]!, completedAt: T1 } } };
+    s = completeStep(s, 2, "b:rule:0", "b:rule:1", T1);
+    s = resetDay(s, 1, T2);
+    expect(isDayUnlocked(s, 2)).toBe(true);
+    s = resetDay(s, 2, T2);
+    expect(isDayUnlocked(s, 2)).toBe(true);
+    expect(dayHasProgress(s, 2)).toBe(false);
+    expect(isDayUnlocked(s, 3)).toBe(false);
+  });
+
+  it("a day opened early stays open after starting it over; a reset is always later than earlier resets", () => {
+    let s = setOverride(initialState(), 3);
+    s = completeStep(s, 3, "c:rule:0", "c:rule:1", T1);
+    s = resetDay(s, 3, T2);
+    expect(isDayUnlocked(s, 3)).toBe(true);
+    expect(dayHasProgress(s, 3)).toBe(false);
+    // This device's clock is behind the one that made the earlier resets.
+    const early = "2026-10-19T08:00:00.000Z";
+    const again = resetDay(s, 3, early);
+    expect(again.dayResets[3]! > s.dayResets[3]!).toBe(true);
+    const whole = resetProgress({ ...s, resetAt: T2 }, early);
+    expect(whole.resetAt! > T2 && whole.resetAt! > s.dayResets[3]!).toBe(true);
+    expect(stampAfter(T2, null, undefined, "nonsense")).toBe(T2);
+  });
+
+  it("practice outside the days stays day 0, also for items older versions saved as Day 1", () => {
+    const s = recordAnswer(initialState(), wrong({ day: 0, key: "coach:i-was-went", nowIso: T1 }));
+    expect(s.days[0]?.startedAt).toBe(T1);
+    expect(courseStarted(s)).toBe(false);
+    expect(courseStarted(startDay(s, 1, T2))).toBe(true);
+    const legacy = JSON.parse(JSON.stringify(recordAnswer(s, wrong({ day: 0, key: "tense-past-simple-x" })))) as AppState;
+    for (const e of Object.values(legacy.errors)) e.day = 1;
+    for (const c of Object.values(legacy.cards)) c.day = 1;
+    const back = migrate(legacy);
+    expect(Object.values(back.errors).map((e) => e.day)).toEqual([0, 0]);
+    expect(Object.values(back.cards).map((c) => c.day)).toEqual([0, 0]);
+    expect(dayHasProgress(back, 1)).toBe(false);
+    expect(isPracticeKey("be-1")).toBe(false);
   });
 
   it("starting Day 7 over clears the test result", () => {

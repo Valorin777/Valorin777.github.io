@@ -10,6 +10,14 @@ import type { AppState } from "@/types/state";
  * the cloud copy lives in three documents under users/{uid}/data/{core|cards|errors} and is
  * merged both ways with mergeStates (union of progress, latest settings), so nothing is lost
  * when two devices were used offline.
+ *
+ * Every write is one transaction: read the three documents, merge them with the local state,
+ * write back only the documents that change. A write therefore never erases what another device
+ * wrote meanwhile (a reset above all). Transactions fail offline instead of being queued as blind
+ * overwrites; the device remembers that it has unsent changes and tries again when it is back
+ * online, on the next change and when the page is hidden. Every document carries the reset times,
+ * so a device that has received only some of the documents of a write cannot bring cleared cards
+ * or mistakes back.
  */
 
 export type CloudStatus = "signed-out" | "signing-in" | "syncing" | "synced" | "offline" | "error";
@@ -52,23 +60,50 @@ export function useCloud(): CloudState {
 
 type Part = "core" | "cards" | "errors";
 const PARTS: Part[] = ["core", "cards", "errors"];
+type Doc = Record<string, unknown>;
+type Docs = Partial<Record<Part, Doc>>;
 
-function split(s: AppState): Record<Part, Record<string, unknown>> {
-  const { cards, errors, ...core } = s;
-  // JSON round trip drops undefined, which Firestore rejects.
-  const clean = <T>(v: T) => JSON.parse(JSON.stringify(v)) as Record<string, unknown>;
-  return { core: clean(core), cards: clean({ cards }), errors: clean({ errors }) };
+/** JSON with object keys sorted: Firestore returns map keys in its own order, not ours. */
+function canonical(v: unknown): string {
+  return JSON.stringify(v, (_key, value: unknown) =>
+    value !== null && typeof value === "object" && !Array.isArray(value)
+      ? Object.fromEntries(
+          Object.keys(value)
+            .sort()
+            .map((k) => [k, (value as Doc)[k]]),
+        )
+      : value,
+  );
 }
 
-function join(parts: Partial<Record<Part, Record<string, unknown>>>): AppState | null {
-  if (!parts.core) return null;
-  // Validated like local storage: older app versions wrote no reset times, and a hand-edited
-  // or half-written document must not break the merge.
-  return migrate({ ...parts.core, cards: parts.cards?.cards ?? {}, errors: parts.errors?.errors ?? {} });
+function split(s: AppState): Record<Part, Doc> {
+  const { cards, errors, ...core } = s;
+  // Every document carries the reset times: see join.
+  const stamps = { resetAt: s.resetAt, dayResets: s.dayResets };
+  // JSON round trip drops undefined, which Firestore rejects.
+  const clean = (v: unknown) => JSON.parse(JSON.stringify(v)) as Doc;
+  return { core: clean(core), cards: clean({ cards, ...stamps }), errors: clean({ errors, ...stamps }) };
+}
+
+/** The reset times a document says it has seen (none in documents from older versions). */
+const stampsOf = (d: Doc | undefined) => ({ resetAt: d?.resetAt, dayResets: d?.dayResets });
+
+function join(docs: Docs): AppState | null {
+  if (!docs.core) return null;
+  // The documents of one write can arrive one by one, so each is brought up to the resets on its
+  // own before the union: a newer core must not vouch for older cards or mistakes. Validated like
+  // local storage: a hand-edited or half-written document must not break the merge. The cards and
+  // errors copies have no updatedAt (epoch), so settings, position and streak come from core.
+  const base = migrate({ ...docs.core, cards: {}, errors: {} });
+  const cards = migrate({ ...stampsOf(docs.cards), cards: docs.cards?.cards });
+  const errors = migrate({ ...stampsOf(docs.errors), errors: docs.errors?.errors });
+  return mergeStates(mergeStates(base, cards), errors);
 }
 
 let stopSync: (() => void) | null = null;
 let flushNow: (() => Promise<void>) | null = null;
+/** The running sync. A second start for the same account (sign-in racing the auth listener) joins it. */
+let session: { uid: string; resync: () => Promise<void> } | null = null;
 
 /**
  * Writes the local state to the cloud now instead of after the usual short delay. Call it after
@@ -76,7 +111,7 @@ let flushNow: (() => Promise<void>) | null = null;
  */
 export function flushCloud(timeoutMs = 2500): Promise<void> {
   if (!flushNow) return Promise.resolve();
-  // Offline, Firestore only resolves once the server has the write: never block the screen on it.
+  // A transaction retries for a while before it gives up offline: never block the screen on it.
   return Promise.race([flushNow(), new Promise<void>((resolve) => setTimeout(resolve, timeoutMs))]);
 }
 
@@ -87,105 +122,176 @@ function errorMessage(e: unknown): string {
     return "Google sign-in is not switched on for this app yet.";
   }
   if (code.includes("unauthorized-domain")) return "This address is not allowed to sign in yet.";
-  if (code.includes("network")) return "No connection. Your progress is safe on this device.";
+  if (code.includes("network") || code.includes("unavailable")) {
+    return "No connection. Your progress is safe on this device.";
+  }
   return "Sign-in did not work. Please try again.";
 }
 
-async function startSync(k: FirebaseKit, uid: string) {
+function startSync(k: FirebaseKit, uid: string): Promise<void> {
+  if (session?.uid === uid) {
+    set({ status: "syncing", problem: null });
+    return session.resync();
+  }
   stopSync?.();
-  const { doc, getDoc, setDoc, onSnapshot } = k.fsMod;
+  const { doc, onSnapshot, runTransaction } = k.fsMod;
   const ref = (p: Part) => doc(k.db, "users", uid, "data", p);
-  const remote: Partial<Record<Part, Record<string, unknown>>> = {};
-  const lastWritten: Partial<Record<Part, string>> = {};
+  /** What this device knows the cloud holds, per document. */
+  const remote: Docs = {};
+  /** Snapshots received per document: a write must not replace a newer one in `remote`. */
+  const received: Record<Part, number> = { core: 0, cards: 0, errors: 0 };
+  /** Set once this sync is stopped or replaced: work still in flight must not touch anything. */
+  let stopped = false;
+  /** The cloud may not have the latest local changes yet (the first sync has not run either). */
+  let dirty = true;
+  /** Set while this module replaces the local state with a merge: that is no change to send. */
+  let applying = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let resetCheck: ReturnType<typeof setTimeout> | null = null;
   set({ status: "syncing", problem: null });
 
-  const writeAll = async (s: AppState) => {
-    const parts = split(s);
-    await Promise.all(
-      PARTS.map(async (p) => {
-        const json = JSON.stringify(parts[p]);
-        if (lastWritten[p] === json) return;
-        lastWritten[p] = json;
-        await setDoc(ref(p), parts[p]);
-      }),
-    );
-    set({ status: "synced", lastSyncAt: new Date().toISOString(), problem: null });
+  const apply = (s: AppState) => {
+    applying = true;
+    try {
+      replaceState(s);
+    } finally {
+      applying = false;
+    }
   };
 
-  try {
-    const snaps = await Promise.all(PARTS.map((p) => getDoc(ref(p))));
-    snaps.forEach((snap, i) => {
-      if (snap.exists()) {
-        remote[PARTS[i]] = snap.data() as Record<string, unknown>;
-        lastWritten[PARTS[i]] = JSON.stringify(remote[PARTS[i]]);
-      }
+  /** One atomic read-merge-write of the three documents. Never rejects. */
+  const writeOnce = async (): Promise<void> => {
+    if (stopped) return;
+    dirty = false;
+    const before = { ...received };
+    try {
+      // Firestore runs this again when another device wrote between the reads and the commit.
+      const out = await runTransaction(k.db, async (tx) => {
+        const snaps = await Promise.all(PARTS.map((p) => tx.get(ref(p))));
+        if (stopped) throw new Error("sync stopped");
+        const read: Docs = {};
+        snaps.forEach((snap, i) => {
+          if (snap.exists()) read[PARTS[i]] = snap.data();
+        });
+        const local = getState();
+        const fromCloud = join(read);
+        const merged = fromCloud ? mergeStates(local, fromCloud) : local;
+        const parts = split(merged);
+        const now: Docs = {};
+        for (const p of PARTS) {
+          const was = read[p];
+          if (was && canonical(was) === canonical(parts[p])) {
+            now[p] = was;
+          } else {
+            tx.set(ref(p), parts[p]);
+            now[p] = parts[p];
+          }
+        }
+        return { local, merged, now };
+      });
+      if (stopped) return;
+      // What the cloud holds now, unless a snapshot that came in meanwhile already said so.
+      for (const p of PARTS) if (received[p] === before[p]) remote[p] = out.now[p];
+      const current = getState();
+      // A change made while the transaction ran stays (it is dirty and goes with the next write).
+      const next = current === out.local ? out.merged : mergeStates(current, out.merged);
+      if (canonical(next) !== canonical(current)) apply(next);
+      set({ status: "synced", lastSyncAt: new Date().toISOString(), problem: null });
+    } catch (e) {
+      if (stopped) return;
+      dirty = true;
+      set({ status: navigator.onLine ? "error" : "offline", problem: errorMessage(e) || null });
+    }
+  };
+
+  // One transaction at a time; calls made while one waits to start share it.
+  let tail: Promise<void> = Promise.resolve();
+  let queued: Promise<void> | null = null;
+  const write = (): Promise<void> => {
+    if (queued) return queued;
+    const run = tail.then(() => {
+      queued = null;
+      return writeOnce();
     });
-    const fromCloud = join(remote);
-    const merged = fromCloud ? mergeStates(getState(), fromCloud) : getState();
-    if (merged !== getState()) replaceState(merged);
-    await writeAll(merged);
-  } catch (e) {
-    set({ status: navigator.onLine ? "error" : "offline", problem: errorMessage(e) || null });
-  }
+    queued = run;
+    tail = run;
+    return run;
+  };
+
+  /** Sends unsent changes now; otherwise waits for the write already running, if any. */
+  const flush = (): Promise<void> => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    return dirty ? write() : tail;
+  };
 
   // Remote → local: changes from other devices.
   const unsubs = PARTS.map((p) =>
     onSnapshot(ref(p), (snap) => {
-      if (snap.metadata.hasPendingWrites || !snap.exists()) return;
-      remote[p] = snap.data() as Record<string, unknown>;
-      lastWritten[p] = JSON.stringify(remote[p]);
+      if (stopped || snap.metadata.hasPendingWrites || !snap.exists()) return;
+      received[p]++;
+      remote[p] = snap.data();
       const fromCloud = join(remote);
       if (!fromCloud) return;
-      const merged = mergeStates(getState(), fromCloud);
-      if (JSON.stringify(merged) !== JSON.stringify(getState())) replaceState(merged);
-      // Another device overwrote the cloud with a copy from before a reset: put the reset back.
-      if (missesResets(fromCloud, merged)) {
-        writeAll(merged).catch((e: unknown) =>
-          set({ status: navigator.onLine ? "error" : "offline", problem: errorMessage(e) || null }),
-        );
-      }
-      set({ status: "synced", lastSyncAt: new Date().toISOString() });
+      const local = getState();
+      const merged = mergeStates(local, fromCloud);
+      if (canonical(merged) !== canonical(local)) apply(merged);
+      // A document without a reset this device knows of (another device's stale copy, an older
+      // version of the app): put the reset back at once. The documents of one write arrive one
+      // by one, so look after the others have had a chance to come in.
+      resetCheck ??= setTimeout(() => {
+        resetCheck = null;
+        const s = getState();
+        const stale = PARTS.some((q) => remote[q] !== undefined && missesResets(migrate(stampsOf(remote[q])), s));
+        if (!stopped && stale) void write();
+      }, 0);
+      if (!dirty && !snap.metadata.fromCache) set({ status: "synced", lastSyncAt: new Date().toISOString() });
     }),
   );
 
   // Local → remote: debounced.
-  let timer: ReturnType<typeof setTimeout> | null = null;
   const unsubStore = subscribeStore(() => {
+    if (applying) return;
+    dirty = true;
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => {
-      writeAll(getState()).catch((e: unknown) =>
-        set({ status: navigator.onLine ? "error" : "offline", problem: errorMessage(e) || null }),
-      );
+      timer = null;
+      void write();
     }, WRITE_DELAY_MS);
   });
 
-  const onOnline = () => writeAll(getState()).catch(() => undefined);
+  // Back online: send what could not be sent (offline transactions fail, they are not queued).
+  const onOnline = () => void flush();
   window.addEventListener("online", onOnline);
 
-  flushNow = async () => {
-    if (timer) clearTimeout(timer);
-    timer = null;
-    await writeAll(getState()).catch((e: unknown) =>
-      set({ status: navigator.onLine ? "error" : "offline", problem: errorMessage(e) || null }),
-    );
-  };
   // Leaving the page with a write still waiting: send it now, not never.
   const onHide = (e: Event) => {
-    if (timer && (e.type === "pagehide" || document.visibilityState === "hidden")) void flushNow?.();
+    if (e.type === "pagehide" || document.visibilityState === "hidden") void flush();
   };
   document.addEventListener("visibilitychange", onHide);
   window.addEventListener("pagehide", onHide);
 
-  stopSync = () => {
+  const mine = { uid, resync: write };
+  const stop = () => {
+    stopped = true;
     unsubs.forEach((u) => u());
     unsubStore();
     window.removeEventListener("online", onOnline);
     document.removeEventListener("visibilitychange", onHide);
     window.removeEventListener("pagehide", onHide);
     if (timer) clearTimeout(timer);
-    stopSync = null;
-    flushNow = null;
+    if (resetCheck) clearTimeout(resetCheck);
+    if (session === mine) session = null;
+    if (stopSync === stop) {
+      stopSync = null;
+      flushNow = null;
+    }
   };
+  stopSync = stop;
+  flushNow = flush;
+  session = mine;
+  // First sync: the cloud gets what this device did meanwhile, this device gets the cloud.
+  return write();
 }
 
 function toUser(u: { uid: string; displayName: string | null; email: string | null; photoURL: string | null }): CloudUser {
@@ -193,6 +299,8 @@ function toUser(u: { uid: string; displayName: string | null; email: string | nu
 }
 
 let started = false;
+/** The auth listener that notices a sign-out (in another tab too) is registered once. */
+let watchingAuth = false;
 
 /** Called once on app start: resumes sync only for learners who signed in before. */
 export function initCloud(): void {
@@ -208,6 +316,7 @@ export function initCloud(): void {
   set({ status: "syncing" });
   loadFirebase()
     .then((k) => {
+      watchingAuth = true;
       k.authMod.onAuthStateChanged(k.auth, (u) => {
         if (u) {
           set({ user: toUser(u) });
@@ -245,7 +354,9 @@ export async function signIn(): Promise<void> {
       throw e;
     }
     set({ user: toUser(cred.user) });
-    if (!started) {
+    // A first sign-in in this tab (initCloud found no earlier sign-in and registered nothing).
+    if (!watchingAuth) {
+      watchingAuth = true;
       started = true;
       k.authMod.onAuthStateChanged(k.auth, (u) => {
         if (!u) {

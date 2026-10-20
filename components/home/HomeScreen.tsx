@@ -23,7 +23,7 @@ import { ProgressRing } from "@/components/ui/ProgressRing";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { today } from "@/lib/date";
 import { drillSize } from "@/lib/drill";
-import { dueCount, getDayProgress, isDayUnlocked } from "@/lib/progress";
+import { courseStarted, dueCount, getDayProgress, isDayUnlocked } from "@/lib/progress";
 import { buildSteps, formatMinutes, progressRatio, remainingSeconds, sectionBounds, SECTION_LABELS, type Section } from "@/lib/steps";
 import { storageAvailable, useAppState, useHydrated } from "@/lib/store";
 import type { AppState } from "@/types/state";
@@ -126,7 +126,8 @@ export function HomeScreen() {
       due: dueCount(state, t),
       drill: drillSize(state, DAYS, t),
       mistakes: Object.keys(state.errors).length,
-      fresh: !state.diagnostic && Object.keys(state.days).length === 0,
+      // Practice with the coach or the tenses before the level check does not hide it.
+      fresh: !state.diagnostic && !courseStarted(state),
       courseDone: Boolean(getDayProgress(state, 7).completedAt),
     };
   }, [state]);

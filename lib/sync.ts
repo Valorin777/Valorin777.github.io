@@ -8,7 +8,7 @@ import type {
   FinalTestResult,
   Streak,
 } from "@/types/state";
-import { initialState, withoutDay } from "@/lib/progress";
+import { initialState } from "@/lib/progress";
 
 /**
  * Merging the local state with the cloud copy. Pure and deterministic: merge(x, x) equals x,
@@ -17,9 +17,10 @@ import { initialState, withoutDay } from "@/lib/progress";
  *
  * Progress only ever grows in a merge (a union), so starting over is recorded as a time:
  * resetAt for the whole course, dayResets[n] for one day. A copy that has not seen the latest
- * reset gives up the data that reset cleared before the union, so the cloud or another device
- * cannot bring it back. Progress made on such a copy after the reset is lost too: starting over
- * wins.
+ * reset first gives up everything it made before that time (by each item's own date: a day's
+ * startedAt, a card's createdAt, a mistake's firstAt, a result's completedAt), so the cloud or
+ * another device cannot bring cleared progress back, while work done after the reset on a
+ * device that had not heard of it yet is kept.
  */
 
 const timeOf = (iso: string): number => {
@@ -114,20 +115,53 @@ function mergeRecords<T>(a: Record<string, T>, b: Record<string, T>, pick: (x: T
 const latest = (x: string | null | undefined, y: string | null | undefined): string | null =>
   !x ? (y ?? null) : !y ? x : cmpTime(y, x) > 0 ? y : x;
 
-/** Everything a whole-course reset clears; settings, updatedAt and the reset time stay. */
-function withoutProgress(s: AppState): AppState {
-  const empty = initialState();
-  return { ...empty, version: s.version, updatedAt: s.updatedAt, settings: s.settings, resetAt: s.resetAt };
+/** Made at or after the reset time: survives catching up to that reset. */
+const madeSince = (made: string | undefined, at: string): boolean => made !== undefined && cmpTime(made, at) >= 0;
+
+function keep<T>(record: Record<string, T>, ok: (value: T) => boolean): Record<string, T> {
+  return Object.fromEntries(Object.entries(record).filter(([, value]) => ok(value)));
 }
 
-/** Drops what this copy holds from before resets it has not seen yet (dayResets are all newer than resetAt). */
+/** A copy catching up to a whole-course reset at `at`: only what it made since then stays. */
+function sinceReset(s: AppState, at: string): AppState {
+  const days: Record<number, DayProgress> = {};
+  for (const [key, day] of Object.entries(s.days)) if (madeSince(day.startedAt, at)) days[Number(key)] = day;
+  return {
+    ...s,
+    diagnostic: s.diagnostic && madeSince(s.diagnostic.completedAt, at) ? s.diagnostic : null,
+    finalTest: s.finalTest && madeSince(s.finalTest.completedAt, at) ? s.finalTest : null,
+    position: s.position && days[s.position.day] ? s.position : null,
+    days,
+    cards: keep(s.cards, (c) => madeSince(c.createdAt, at)),
+    errors: keep(s.errors, (e) => madeSince(e.firstAt, at)),
+    // Streak days are calendar days: only a streak that went on after the reset day survives.
+    streak: s.streak.lastDay && s.streak.lastDay > at.slice(0, 10) ? s.streak : initialState().streak,
+    dayResets: keep(s.dayResets ?? {}, (t) => cmpTime(t, at) > 0),
+  };
+}
+
+/** A copy catching up to one day started over at `at`. */
+function sinceDayReset(s: AppState, day: number, at: string): AppState {
+  const days = { ...s.days };
+  if (days[day] && !madeSince(days[day].startedAt, at)) delete days[day];
+  return {
+    ...s,
+    days,
+    cards: keep(s.cards, (c) => c.day !== day || madeSince(c.createdAt, at)),
+    errors: keep(s.errors, (e) => e.day !== day || madeSince(e.firstAt, at)),
+    position: s.position?.day === day && !days[day] ? null : s.position,
+    finalTest: day === 7 && s.finalTest && !madeSince(s.finalTest.completedAt, at) ? null : s.finalTest,
+  };
+}
+
+/** Brings a copy up to the resets it has not seen yet (dayResets are all newer than resetAt). */
 function catchUp(s: AppState, resetAt: string | null, dayResets: Record<number, string>): AppState {
   let out = s;
-  if (resetAt && (!s.resetAt || cmpTime(s.resetAt, resetAt) < 0)) out = withoutProgress(out);
+  if (resetAt && (!s.resetAt || cmpTime(s.resetAt, resetAt) < 0)) out = sinceReset(out, resetAt);
   for (const [key, at] of Object.entries(dayResets)) {
     const day = Number(key);
-    const mine = out.dayResets?.[day];
-    if (!mine || cmpTime(mine, at) < 0) out = withoutDay(out, day);
+    const mine = s.dayResets?.[day];
+    if (!mine || cmpTime(mine, at) < 0) out = sinceDayReset(out, day, at);
   }
   return out;
 }

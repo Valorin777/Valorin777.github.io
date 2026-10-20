@@ -57,6 +57,24 @@ AI worker: see `worker/README.md` (`npx wrangler deploy`, secret `OPENROUTER_API
 4. The player builds the steps automatically: rules → mistakes → note for Russian speakers →
    exercises per topic, then listen & speak, then review.
 
+## Running costs
+
+Measured 20.10.2026 with the real prompts (OpenRouter prices):
+
+| What | Model | Per call |
+| --- | --- | --- |
+| Coach reply | Claude Haiku 5.5 | $0.0003 |
+| Coach grammar check (correction + tip) | Claude Sonnet 5.5 | $0.010 (grows with the conversation, up to ~$0.013) |
+| Coach voice | gpt-audio-mini (Marin) | $0.0005 |
+| Mistake explanation | Claude Haiku 5.5 | $0.0001, cached per exercise and answer |
+| Translation | Claude Haiku 5.5 | $0.0001, cached |
+| Lessons, tenses, Day 7, cards | prerecorded audio | $0 |
+| Speech recognition | Whisper on Cloudflare Workers AI | Cloudflare free tier, not OpenRouter |
+
+One coach turn is about $0.011. A week: without the coach under $0.05; with the coach 15 min a day
+about $2, 30 min about $4, an hour about $8. Moving the grammar check to Haiku (`REVIEW_MODEL` in
+`worker/wrangler.jsonc`) makes the coach about ten times cheaper, with less precise corrections.
+
 ## Adding a tense entry
 
 Write `content/tenses/<id>.ts` (`export const entry = { … } satisfies TenseRefInput`), add the id to

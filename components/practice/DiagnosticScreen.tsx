@@ -17,6 +17,7 @@ import { CATEGORY_LABELS } from "@/lib/content/schema";
 import { scoreDiagnostic, skippedDiagnostic } from "@/lib/diagnostic";
 import { actions, useAppState, useHydrated } from "@/lib/store";
 import type { DiagnosticResult } from "@/types/state";
+import { courseStarted } from "@/lib/progress";
 
 const LEVEL_TEXT: Record<string, string> = {
   "B1-": "a solid start, around B1",
@@ -151,7 +152,7 @@ function Quiz() {
 
 function Result({ result, onRetake }: { result: DiagnosticResult; onRetake: () => void }) {
   const state = useAppState();
-  const started = Object.keys(state.days).length > 0;
+  const started = courseStarted(state);
   const focus = result.focus.slice(0, 2).map((c) => CATEGORY_LABELS[c]);
   const rows = Object.entries(result.byCategory) as [keyof typeof CATEGORY_LABELS, { correct: number; total: number }][];
   return (
