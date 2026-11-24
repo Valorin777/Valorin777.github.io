@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#152c26">
+<meta name="description" content="Try a sample upholstery enquiry with photos. Demo only; no uploads, messages or saved data.">
+<title>Estimate | Coastal Upholstery</title><link rel="icon" href="mark.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css"><script src="main.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="concept">Private design concept <span aria-hidden="true">·</span> Not the official Coastal Upholstery website</div>
+<header class="site-header"><div class="top shell">
+  <a href="index.html" class="wordmark" aria-label="Coastal Upholstery home"><img src="mark.svg" width="44" height="44" alt=""><span>Coastal<small>UPHOLSTERY</small></span></a>
+  <nav aria-label="Main navigation"><a href="index.html">Home</a><a href="services.html">Services</a><a href="work.html">Work</a><a href="workshop.html">Workshop</a><a href="estimate.html" aria-current="page">Estimate</a></nav>
+</div></header>
+<main id="main">
+<section class="inner-intro"><div class="shell inner-intro-body">
+    <p class="eyebrow"><span></span>Demo estimate</p><h1>Show us what<br><em>needs work.</em></h1><p class="inner-lead">Try the full enquiry with sample information. Nothing leaves your browser.</p>
+    </div></section><div class="shell estimate-layout">
+ <aside class="estimate-guidance"><p class="eyebrow"><span></span> What to include</p><h2>Three things that help.</h2><ol><li><strong>The piece.</strong> What is it, and how big is it?</li><li><strong>The problem.</strong> Which parts are worn, and what would you like to keep?</li><li><strong>The view.</strong> A wide photo and a close-up show what words can miss.</li></ol><a href="services.html" class="text-link">Check the service details</a></aside>
+ <section class="estimate-form-card" aria-label="Demo estimate form">  <form id="estimate-form" method="dialog" novalidate>
+    <p class="form-notice" id="form-notice">Sample information only. This form does not contact the shop, upload photos, or save your details.</p>
+    <label>Project type <select id="project-type" name="project" required><option value="">Choose a project</option><option value="marine">Marine upholstery</option><option value="auto">Auto &amp; motorcycle</option><option value="leather">Leather repair</option><option value="commercial">Commercial seating</option></select></label>
+    <div class="form-row"><label>Name <input name="name" autocomplete="off" placeholder="e.g. Morgan Smith" maxlength="80" required></label><label>Email <input type="email" name="email" autocomplete="off" placeholder="morgan@example.com" maxlength="150" required></label></div>
+    <label>What needs work? <textarea name="details" rows="3" maxlength="700" placeholder="e.g. Two worn cockpit cushions on a 21-ft boat." required></textarea></label>
+    <div class="upload"><p class="upload-label">Add photos <span>(optional, up to 3)</span></p><button class="upload-button" id="choose-photos" type="button" aria-describedby="photo-status">Choose photos</button><input class="sr-only" aria-label="Project photos" tabindex="-1" id="project-photos" name="photos" type="file" accept="image/jpeg,image/png,image/webp" multiple></div>
+    <p class="footnote" id="photo-status" aria-live="polite">No photos selected. JPG, PNG or WebP. Up to 10 MB per photo.</p>
+    <div class="photo-previews" id="photo-previews"></div>
+    <p id="form-error" class="form-error" role="alert" hidden></p><button class="button button--green" type="submit">Preview enquiry</button>
+  </form>
+  <section id="result" tabindex="-1" hidden aria-labelledby="result-heading"><h3 id="result-heading">Here’s your sample enquiry.</h3><p id="result-summary"></p><div class="photo-previews" id="result-previews"></div><p class="form-notice">Demo complete. Nothing was sent or saved.</p><button class="button button--green" type="button" id="done">Start another example</button></section>
+</section>
+</div>
+</main>
+<footer class="footer"><div class="shell footer-inner">
+  <a href="index.html" class="wordmark" aria-label="Coastal Upholstery home"><img src="mark.svg" width="44" height="44" alt=""><span>Coastal<small>UPHOLSTERY</small></span></a>
+  <address>14 Cottage Road<br>South Portland, ME 04106</address>
+  <p>Unofficial redesign concept.<br>Images are illustrative, not client work.</p>
+</div><nav class="shell footer-nav" aria-label="Footer navigation"><a href="services.html">Services</a><a href="work.html">Work</a><a href="workshop.html">Workshop</a><a href="estimate.html">Estimate</a></nav></footer>
+</body>
+</html>
